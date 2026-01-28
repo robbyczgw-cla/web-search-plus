@@ -270,9 +270,9 @@ export EXA_API_KEY="your-key"      # https://exa.ai
 > At minimum ONE key. You can use just Serper, just Tavily, or all three. Missing keys = that provider is skipped.
 
 **Q: Where do I get API keys?**
-> - Serper: https://serper.dev (100 free searches/month)
-> - Tavily: https://tavily.com (1000 free searches/month)
-> - Exa: https://exa.ai (limited free tier)
+> - Serper: https://serper.dev (2,500 free queries, no credit card)
+> - Tavily: https://tavily.com (1,000 free searches/month)
+> - Exa: https://exa.ai (1,000 free searches/month)
 
 **Q: How do I set API keys?**
 > Create `.env` in your workspace:
@@ -305,7 +305,7 @@ export EXA_API_KEY="your-key"      # https://exa.ai
 > 3. Some queries have no results (very niche topics)
 
 **Q: Rate limited?**
-> Each provider has limits. Spread queries across providers or wait. Serper: 100/month free, Tavily: 1000/month free.
+> Each provider has limits. Spread queries across providers or wait. Serper: 2,500 free total, Tavily: 1,000/month free.
 
 ### For Clawdbot Users
 
