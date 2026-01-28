@@ -34,7 +34,7 @@ export TAVILY_API_KEY="your-key"
 python3 scripts/search.py -q "your query"
 ```
 
-Core Clawdbot only supports `brave` or `perplexity` as built-in providers. This skill adds Serper, Tavily, and Exa as **additional** options via its own scripts.
+Core Clawdbot only supports `brave` as the built-in web search provider. This skill adds Serper, Tavily, and Exa as **additional** options via its own scripts.
 
 ---
 
