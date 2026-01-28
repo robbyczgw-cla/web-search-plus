@@ -32,6 +32,29 @@ from urllib.error import HTTPError, URLError
 
 
 # =============================================================================
+# Auto-load .env from skill directory (if exists)
+# =============================================================================
+def _load_env_file():
+    """Load .env file from skill root directory if it exists."""
+    env_path = Path(__file__).parent.parent / ".env"
+    if env_path.exists():
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    # Handle export VAR=value or VAR=value
+                    if line.startswith("export "):
+                        line = line[7:]
+                    key, _, value = line.partition("=")
+                    key = key.strip()
+                    value = value.strip().strip('"').strip("'")
+                    if key and key not in os.environ:
+                        os.environ[key] = value
+
+_load_env_file()
+
+
+# =============================================================================
 # Configuration
 # =============================================================================
 

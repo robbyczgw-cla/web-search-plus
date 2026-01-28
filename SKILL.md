@@ -1,6 +1,6 @@
 ---
 name: web-search-plus
-version: 2.1.8
+version: 2.2.0
 description: Unified search skill with Intelligent Auto-Routing. Uses multi-signal analysis to automatically select between Serper (Google), Tavily (Research), and Exa (Neural) with confidence scoring.
 tags: [search, web-search, serper, tavily, exa, google, research, semantic-search, auto-routing, multi-provider, shopping, free-tier]
 ---
@@ -13,26 +13,46 @@ Multi-provider web search with **Intelligent Auto-Routing**: Serper (Google), Ta
 
 ---
 
-## ⚠️ Important: Don't Modify Core Clawdbot Config
+## 🔑 API Keys Setup
+
+**NEW in v2.2.0**: The script **auto-loads** API keys from `.env` in the skill directory!
+
+### Quick Setup
+
+1. Create `.env` in your skill folder:
+```bash
+# /path/to/skills/web-search-plus/.env
+export SERPER_API_KEY="your-key"   # https://serper.dev
+export TAVILY_API_KEY="your-key"   # https://tavily.com  
+export EXA_API_KEY="your-key"      # https://exa.ai
+```
+
+2. Just run — keys load automatically:
+```bash
+python3 scripts/search.py -q "your query"
+# No need for 'source .env' anymore! ✨
+```
+
+### Get Free API Keys
+
+| Provider | Free Tier | Sign Up |
+|----------|-----------|---------|
+| Serper | 2,500 queries/mo | https://serper.dev |
+| Tavily | 1,000 queries/mo | https://tavily.com |
+| Exa | 1,000 queries/mo | https://exa.ai |
+
+---
+
+## ⚠️ Don't Modify Core Clawdbot Config
 
 **Tavily, Serper, and Exa are NOT core Clawdbot providers.**
 
-❌ **DON'T** add this to `~/.clawdbot/clawdbot.json`:
+❌ **DON'T** add to `~/.clawdbot/clawdbot.json`:
 ```json
-"tools": {
-  "web": {
-    "search": {
-      "provider": "tavily"  // WRONG - will cause errors!
-    }
-  }
-}
+"tools": { "web": { "search": { "provider": "tavily" }}}  // WRONG!
 ```
 
-✅ **DO** use this skill's scripts with environment variables:
-```bash
-export TAVILY_API_KEY="your-key"
-python3 scripts/search.py -q "your query"
-```
+✅ **DO** use this skill's scripts — keys auto-load from `.env`
 
 Core Clawdbot only supports `brave` as the built-in web search provider. This skill adds Serper, Tavily, and Exa as **additional** options via its own scripts.
 
@@ -235,19 +255,6 @@ python3 scripts/search.py -p exa --similar-url "https://stripe.com" --category c
 
 ---
 
-## Environment Setup
-
-```bash
-# In your .env file (use 'export' prefix!):
-export SERPER_API_KEY="your-key"   # https://serper.dev
-export TAVILY_API_KEY="your-key"   # https://tavily.com  
-export EXA_API_KEY="your-key"      # https://exa.ai
-
-# Then load with: source .env
-```
-
----
-
 ## FAQ
 
 ### General
@@ -275,13 +282,14 @@ export EXA_API_KEY="your-key"      # https://exa.ai
 > - Exa: https://exa.ai (1,000 free searches/month)
 
 **Q: How do I set API keys?**
-> Create `.env` in your workspace:
+> Create `.env` in the skill folder (auto-loaded since v2.2.0):
 > ```bash
+> # /path/to/skills/web-search-plus/.env
 > export SERPER_API_KEY="your-key"
 > export TAVILY_API_KEY="your-key"
 > export EXA_API_KEY="your-key"
 > ```
-> Then `source .env` or add to your shell profile.
+> Keys are loaded automatically — no `source` needed!
 
 ### Routing Details
 
@@ -297,7 +305,9 @@ export EXA_API_KEY="your-key"      # https://exa.ai
 ### Troubleshooting
 
 **Q: "No API key found" error?**
-> Make sure keys are exported (not just set): `export SERPER_API_KEY="..."` and sourced.
+> 1. Check `.env` exists in skill folder with `export VAR=value` format
+> 2. Keys auto-load from skill's `.env` since v2.2.0
+> 3. Or set in system environment: `export SERPER_API_KEY="..."`
 
 **Q: Getting empty results?**
 > 1. Check API key is valid
