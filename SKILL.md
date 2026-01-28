@@ -1,6 +1,6 @@
 ---
 name: web-search-plus
-version: 2.2.0
+version: 2.2.1
 description: Unified search skill with Intelligent Auto-Routing. Uses multi-signal analysis to automatically select between Serper (Google), Tavily (Research), and Exa (Neural) with confidence scoring.
 tags: [search, web-search, serper, tavily, exa, google, research, semantic-search, auto-routing, multi-provider, shopping, free-tier]
 ---
@@ -19,7 +19,7 @@ Multi-provider web search with **Intelligent Auto-Routing**: Serper (Google), Ta
 
 ### Quick Setup
 
-1. Create `.env` in your skill folder:
+**Option A: .env file** (recommended)
 ```bash
 # /path/to/skills/web-search-plus/.env
 export SERPER_API_KEY="your-key"   # https://serper.dev
@@ -27,11 +27,22 @@ export TAVILY_API_KEY="your-key"   # https://tavily.com
 export EXA_API_KEY="your-key"      # https://exa.ai
 ```
 
-2. Just run — keys load automatically:
+**Option B: config.json** (NEW in v2.2.1)
+```json
+{
+  "serper": { "api_key": "your-serper-key" },
+  "tavily": { "api_key": "your-tavily-key" },
+  "exa": { "api_key": "your-exa-key" }
+}
+```
+
+Just run — keys load automatically:
 ```bash
 python3 scripts/search.py -q "your query"
 # No need for 'source .env' anymore! ✨
 ```
+
+**Priority:** config.json > .env > environment variable
 
 ### Get Free API Keys
 
@@ -282,14 +293,17 @@ python3 scripts/search.py -p exa --similar-url "https://stripe.com" --category c
 > - Exa: https://exa.ai (1,000 free searches/month)
 
 **Q: How do I set API keys?**
-> Create `.env` in the skill folder (auto-loaded since v2.2.0):
+> Two options (both auto-load):
+> 
+> **Option A: .env file**
 > ```bash
-> # /path/to/skills/web-search-plus/.env
 > export SERPER_API_KEY="your-key"
-> export TAVILY_API_KEY="your-key"
-> export EXA_API_KEY="your-key"
 > ```
-> Keys are loaded automatically — no `source` needed!
+> 
+> **Option B: config.json** (v2.2.1+)
+> ```json
+> { "serper": { "api_key": "your-key" } }
+> ```
 
 ### Routing Details
 
