@@ -4,9 +4,9 @@
 
 ### 📝 Documentation
 
-- Added warning about NOT using Tavily/Serper/Exa in core Clawdbot config
-- Core Clawdbot only supports `brave` as the built-in provider
-- This skill's providers must be used via environment variables and scripts, not `clawdbot.json`
+- Added warning about NOT using Tavily/Serper/Exa in core Moltbot config
+- Core Moltbot only supports `brave` as the built-in provider
+- This skill's providers must be used via environment variables and scripts, not `moltbot.json`
 
 ## [2.1.0] - 2026-01-23
 

@@ -60,18 +60,18 @@ python3 scripts/search.py -q "your query"
 
 ---
 
-## ⚠️ Don't Modify Core Clawdbot Config
+## ⚠️ Don't Modify Core Moltbot Config
 
-**Tavily, Serper, and Exa are NOT core Clawdbot providers.**
+**Tavily, Serper, and Exa are NOT core Moltbot providers.**
 
-❌ **DON'T** add to `~/.clawdbot/clawdbot.json`:
+❌ **DON'T** add to `~/.moltbot/moltbot.json`:
 ```json
 "tools": { "web": { "search": { "provider": "tavily" }}}  // WRONG!
 ```
 
 ✅ **DO** use this skill's scripts — keys auto-load from `.env`
 
-Core Clawdbot only supports `brave` as the built-in web search provider. This skill adds Serper, Tavily, and Exa as **additional** options via its own scripts.
+Core Moltbot only supports `brave` as the built-in web search provider. This skill adds Serper, Tavily, and Exa as **additional** options via its own scripts.
 
 ---
 
@@ -337,10 +337,10 @@ python3 scripts/search.py -p exa --similar-url "https://stripe.com" --category c
 **Q: Rate limited?**
 > Each provider has limits. Spread queries across providers or wait. Serper: 2,500 free total, Tavily: 1,000/month free.
 
-### For Clawdbot Users
+### For Moltbot Users
 
 **Q: How do I use this in chat?**
-> Just ask! Clawdbot auto-detects search intent. Or explicitly: "search with web-search-plus for..."
+> Just ask! Moltbot auto-detects search intent. Or explicitly: "search with web-search-plus for..."
 
 **Q: Does it replace built-in Brave Search?**
 > No, it's complementary. Use Brave for quick lookups, web-search-plus for research/shopping/discovery.

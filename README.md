@@ -29,7 +29,7 @@ python3 scripts/search.py -q "companies like stripe.com"        # → Exa (100% 
 
 ## 🔍 When to Use Which Provider
 
-### Built-in Brave Search (Clawdbot default)
+### Built-in Brave Search (Moltbot default)
 - ✅ General web searches
 - ✅ Privacy-focused
 - ✅ Quick lookups
@@ -646,4 +646,4 @@ MIT
 - [Serper](https://serper.dev) — Google Search API
 - [Tavily](https://tavily.com) — AI Research Search
 - [Exa](https://exa.ai) — Neural Search
-- [ClawdHub](https://clawdhub.com) — Clawdbot Skills
+- [ClawdHub](https://clawdhub.com) — Moltbot Skills
