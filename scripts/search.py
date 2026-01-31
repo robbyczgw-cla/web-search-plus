@@ -1234,14 +1234,24 @@ Full docs: See README.md and SKILL.md
         provider = args.provider or "serper"
         routing_info = {"auto_routed": False, "provider": provider}
     
-    # Validate API key
-    api_key = validate_api_key(provider, config)
+    # Build provider fallback list
+    auto_config = config.get("auto_routing", {})
+    provider_priority = auto_config.get("provider_priority", ["serper", "tavily", "exa"])
+    disabled_providers = auto_config.get("disabled_providers", [])
     
-    try:
-        if provider == "serper":
-            result = search_serper(
+    # Start with the selected provider, then try others in priority order
+    providers_to_try = [provider]
+    for p in provider_priority:
+        if p not in providers_to_try and p not in disabled_providers:
+            providers_to_try.append(p)
+    
+    # Helper function to execute search for a provider
+    def execute_search(prov: str) -> Dict[str, Any]:
+        key = validate_api_key(prov, config)
+        if prov == "serper":
+            return search_serper(
                 query=args.query,
-                api_key=api_key,
+                api_key=key,
                 max_results=args.max_results,
                 country=args.country,
                 language=args.language,
@@ -1249,10 +1259,10 @@ Full docs: See README.md and SKILL.md
                 time_range=args.time_range,
                 include_images=args.images,
             )
-        elif provider == "tavily":
-            result = search_tavily(
+        elif prov == "tavily":
+            return search_tavily(
                 query=args.query,
-                api_key=api_key,
+                api_key=key,
                 max_results=args.max_results,
                 depth=args.depth,
                 topic=args.topic,
@@ -1261,10 +1271,10 @@ Full docs: See README.md and SKILL.md
                 include_images=args.images,
                 include_raw_content=args.raw_content,
             )
-        elif provider == "exa":
-            result = search_exa(
+        elif prov == "exa":
+            return search_exa(
                 query=args.query or "",
-                api_key=api_key,
+                api_key=key,
                 max_results=args.max_results,
                 search_type=args.exa_type,
                 category=args.category,
@@ -1274,18 +1284,54 @@ Full docs: See README.md and SKILL.md
                 include_domains=args.include_domains,
                 exclude_domains=args.exclude_domains,
             )
+        else:
+            raise ValueError(f"Unknown provider: {prov}")
+    
+    # Try providers with fallback on error
+    errors = []
+    result = None
+    successful_provider = None
+    
+    for current_provider in providers_to_try:
+        try:
+            result = execute_search(current_provider)
+            successful_provider = current_provider
+            break  # Success! Exit the loop
+        except Exception as e:
+            error_msg = str(e)
+            errors.append({"provider": current_provider, "error": error_msg})
+            # Log fallback attempt to stderr
+            if len(providers_to_try) > 1:
+                remaining = [p for p in providers_to_try if p != current_provider and p not in [err["provider"] for err in errors]]
+                if remaining:
+                    print(json.dumps({
+                        "fallback": True,
+                        "failed_provider": current_provider,
+                        "error": error_msg,
+                        "trying_next": remaining[0] if remaining else None
+                    }), file=sys.stderr)
+            continue  # Try next provider
+    
+    if result is not None:
+        # Update routing info if we fell back to a different provider
+        if successful_provider != provider:
+            routing_info["fallback_used"] = True
+            routing_info["original_provider"] = provider
+            routing_info["provider"] = successful_provider
+            routing_info["fallback_errors"] = errors[:-1] if errors else []
         
         result["routing"] = routing_info
         
         indent = None if args.compact else 2
         print(json.dumps(result, indent=indent, ensure_ascii=False))
-        
-    except Exception as e:
+    else:
+        # All providers failed
         error_result = {
-            "error": str(e),
+            "error": "All providers failed",
             "provider": provider,
             "query": args.query,
             "routing": routing_info,
+            "provider_errors": errors,
         }
         print(json.dumps(error_result, indent=2), file=sys.stderr)
         sys.exit(1)
