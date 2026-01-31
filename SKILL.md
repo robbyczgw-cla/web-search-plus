@@ -1,6 +1,6 @@
 ---
 name: web-search-plus
-version: 2.2.4
+version: 2.2.5
 description: Unified search skill with Intelligent Auto-Routing. Uses multi-signal analysis to automatically select between Serper (Google), Tavily (Research), and Exa (Neural) with confidence scoring.
 tags: [search, web-search, serper, tavily, exa, google, research, semantic-search, auto-routing, multi-provider, shopping, free-tier]
 ---
@@ -9,7 +9,7 @@ tags: [search, web-search, serper, tavily, exa, google, research, semantic-searc
 
 Multi-provider web search with **Intelligent Auto-Routing**: Serper (Google), Tavily (Research), Exa (Neural).
 
-**NEW in v2.2.4**: Automatic error fallback — if one provider fails (rate limit, timeout, etc.), automatically tries the next provider in priority order!
+**NEW in v2.2.5**: Automatic error fallback — if one provider fails (rate limit, timeout, etc.), automatically tries the next provider in priority order!
 
 **NEW in v2.1.0**: Intelligent multi-signal analysis with confidence scoring!
 
@@ -337,7 +337,7 @@ python3 scripts/search.py -p exa --similar-url "https://stripe.com" --category c
 > 3. Some queries have no results (very niche topics)
 
 **Q: Rate limited?**
-> **NEW in v2.2.4**: Automatic fallback! If one provider hits rate limits, the script automatically tries the next provider in priority order (serper → tavily → exa). You'll see fallback info in stderr and the response will include `routing.fallback_used: true`.
+> **NEW in v2.2.5**: Automatic fallback! If one provider hits rate limits, the script automatically tries the next provider in priority order (serper → tavily → exa). You'll see fallback info in stderr and the response will include `routing.fallback_used: true`.
 > 
 > Provider limits: Serper 2,500 free total, Tavily 1,000/month free, Exa 1,000/month free.
 
