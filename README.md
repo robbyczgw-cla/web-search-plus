@@ -101,7 +101,7 @@ When you don't specify a provider, the skill analyzes your query and routes it t
 |---------------|-----------|---------|
 | "price", "buy", "shop", "cost" | **Serper** | "iPhone 16 price" |
 | "near me", "restaurant", "hotel" | **Serper** | "pizza near me" |
-| "weather", "news", "latest" | **Serper** | "weather Vienna" |
+| "weather", "news", "latest" | **Serper** | "weather Berlin" |
 | "how does", "explain", "what is" | **Tavily** | "how does TCP work" |
 | "research", "study", "analyze" | **Tavily** | "climate research" |
 | "tutorial", "guide", "learn" | **Tavily** | "python tutorial" |

@@ -177,7 +177,7 @@ Output:
 
 #### → **Serper** (Google results):
 - 🛍️ **Product specs, prices, shopping** - "Compare iPhone 16 vs Samsung S24"
-- 📍 **Local businesses, places** - "Best pizza in Vienna"
+- 📍 **Local businesses, places** - "Best pizza in Berlin"
 - 🎯 **"Google it"** - Explicitly wants Google results
 - 📰 **Shopping/images/news** - `--type shopping/images/news`
 - 🏆 **Knowledge Graph** - Structured info (prices, ratings, etc.)
@@ -226,7 +226,7 @@ python3 scripts/search.py -q "startups similar to Notion"       # → Exa
 ### Explicit Provider
 
 ```bash
-python3 scripts/search.py -p serper -q "weather Vienna" --type weather
+python3 scripts/search.py -p serper -q "weather Berlin" --type weather
 python3 scripts/search.py -p tavily -q "quantum computing" --depth advanced
 python3 scripts/search.py -p exa --similar-url "https://stripe.com" --category company
 ```
