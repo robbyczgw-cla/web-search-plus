@@ -3,12 +3,12 @@
 > Unified multi-provider web search with **Intelligent Auto-Routing** — uses multi-signal analysis to automatically select between **Serper**, **Tavily**, and **Exa** with confidence scoring.
 
 [![ClawHub](https://img.shields.io/badge/ClawHub-web--search--plus-blue)](https://clawhub.ai)
-[![Version](https://img.shields.io/badge/version-2.1.8-green)](https://clawhub.ai)
+[![Version](https://img.shields.io/badge/version-2.3.0-green)](https://clawhub.ai)
 [![GitHub](https://img.shields.io/badge/GitHub-web--search--plus-blue)](https://github.com/robbyczgw-cla/web-search-plus)
 
 ---
 
-## 🧠 Features (v2.1.8)
+## 🧠 Features (v2.3.0)
 
 **Intelligent Multi-Signal Routing** — The skill now uses sophisticated query analysis:
 
@@ -74,6 +74,17 @@ python3 scripts/search.py -q "companies like stripe.com"        # → Exa (100% 
 
 ## Quick Start
 
+### Option A: Interactive Setup (Recommended)
+
+```bash
+# Run the setup wizard - it guides you through everything
+python3 scripts/setup.py
+```
+
+The wizard explains each provider, collects your API keys, and creates `config.json` automatically.
+
+### Option B: Manual Setup
+
 ```bash
 # 1. Set up at least one API key
 export SERPER_API_KEY="your-key"   # https://serper.dev
@@ -82,8 +93,15 @@ export EXA_API_KEY="your-key"      # https://exa.ai
 
 # 2. Run a search (auto-routed!)
 python3 scripts/search.py -q "best laptop 2024"
+```
 
-# 3. Or specify a provider explicitly
+### Run a Search
+
+```bash
+# Auto-routed to best provider
+python3 scripts/search.py -q "best laptop 2024"
+
+# Or specify a provider explicitly
 python3 scripts/search.py -p serper -q "iPhone 16 specs"
 python3 scripts/search.py -p tavily -q "quantum computing explained" --depth advanced
 python3 scripts/search.py -p exa -q "AI startups 2024" --category company

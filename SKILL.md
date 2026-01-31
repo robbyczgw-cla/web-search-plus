@@ -1,6 +1,6 @@
 ---
 name: web-search-plus
-version: 2.2.5
+version: 2.3.0
 description: Unified search skill with Intelligent Auto-Routing. Uses multi-signal analysis to automatically select between Serper (Google), Tavily (Research), and Exa (Neural) with confidence scoring.
 tags: [search, web-search, serper, tavily, exa, google, research, semantic-search, auto-routing, multi-provider, shopping, free-tier]
 ---
@@ -9,13 +9,43 @@ tags: [search, web-search, serper, tavily, exa, google, research, semantic-searc
 
 Multi-provider web search with **Intelligent Auto-Routing**: Serper (Google), Tavily (Research), Exa (Neural).
 
-**NEW in v2.2.5**: Automatic error fallback — if one provider fails (rate limit, timeout, etc.), automatically tries the next provider in priority order!
+**NEW in v2.3.0**: Interactive setup wizard! Run `python3 scripts/setup.py` for guided configuration.
 
-**NEW in v2.1.0**: Intelligent multi-signal analysis with confidence scoring!
+**NEW in v2.2.5**: Automatic error fallback — if one provider fails (rate limit, timeout, etc.), automatically tries the next provider in priority order!
 
 ---
 
-## 🔑 API Keys Setup
+## 🚀 First Run (Setup Wizard)
+
+New to web-search-plus? The interactive setup wizard guides you through configuration:
+
+```bash
+python3 scripts/setup.py
+```
+
+The wizard will:
+1. **Explain each provider** — What they're best for, free tier limits, signup links
+2. **Ask which providers to enable** — You can use 1, 2, or all 3
+3. **Collect API keys** — Keys are stored locally in `config.json` (gitignored)
+4. **Configure defaults** — Default provider, auto-routing, result count
+
+### What Each Provider Is Best For
+
+| Provider | Best For | Free Tier |
+|----------|----------|-----------|
+| **Serper** | Google results, shopping, prices, local businesses, news | 2,500/month |
+| **Tavily** | Research questions, explanations, academic, full-page content | 1,000/month |
+| **Exa** | Semantic search, "similar to X", startup discovery, papers | 1,000/month |
+
+### Reconfigure Anytime
+
+```bash
+python3 scripts/setup.py --reset
+```
+
+---
+
+## 🔑 API Keys Setup (Manual)
 
 **NEW in v2.2.0**: The script **auto-loads** API keys from `.env` in the skill directory!
 
