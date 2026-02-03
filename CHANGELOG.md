@@ -1,5 +1,12 @@
 # Changelog - Web Search Plus
 
+## [2.4.4] - 2026-02-03
+
+### 📝 Documentation: Provider Count Fix
+
+- **Fixed:** "You can use 1, 2, or all 3" → "1, 2, 3, or all 4" (we have 4 providers now!)
+- **Impact:** Accurate documentation for setup wizard
+
 ## [2.4.3] - 2026-02-03
 
 ### 📝 Documentation: Updated README

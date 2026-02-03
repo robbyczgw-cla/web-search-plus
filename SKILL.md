@@ -1,6 +1,6 @@
 ---
 name: web-search-plus
-version: 2.4.3
+version: 2.4.4
 description: Unified search skill with Intelligent Auto-Routing. Uses multi-signal analysis to automatically select between Serper (Google), Tavily (Research), Exa (Neural), and You.com (RAG/Real-time) with confidence scoring.
 tags: [search, web-search, serper, tavily, exa, you, google, research, semantic-search, auto-routing, multi-provider, shopping, rag, free-tier]
 ---
@@ -27,7 +27,7 @@ python3 scripts/setup.py
 
 The wizard will:
 1. **Explain each provider** — What they're best for, free tier limits, signup links
-2. **Ask which providers to enable** — You can use 1, 2, or all 3
+2. **Ask which providers to enable** — You can use 1, 2, 3, or all 4
 3. **Collect API keys** — Keys are stored locally in `config.json` (gitignored)
 4. **Configure defaults** — Default provider, auto-routing, result count
 
