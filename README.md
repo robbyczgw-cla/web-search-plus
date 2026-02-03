@@ -3,7 +3,7 @@
 > Unified multi-provider web search with **Intelligent Auto-Routing** — uses multi-signal analysis to automatically select between **Serper**, **Tavily**, **Exa**, **You.com**, and **SearXNG** with confidence scoring.
 
 [![ClawHub](https://img.shields.io/badge/ClawHub-web--search--plus-blue)](https://clawhub.ai)
-[![Version](https://img.shields.io/badge/version-2.5.0-green)](https://clawhub.ai)
+[![Version](https://img.shields.io/badge/version-2.5.1-green)](https://clawhub.ai)
 [![GitHub](https://img.shields.io/badge/GitHub-web--search--plus-blue)](https://github.com/robbyczgw-cla/web-search-plus)
 
 ---
