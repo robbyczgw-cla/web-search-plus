@@ -1,5 +1,13 @@
 # Changelog - Web Search Plus
 
+## [2.4.1] - 2026-02-03
+
+### 🐛 Bugfix: You.com URL Encoding
+
+- **Fixed:** URL encoding for You.com queries - spaces and special characters now properly encoded
+- **Impact:** Queries with spaces (e.g., "OpenClaw AI framework") work correctly now
+- **Technical:** Added `urllib.parse.quote` for parameter encoding
+
 ## [2.4.0] - 2026-02-03
 
 ### 🆕 New Provider: You.com

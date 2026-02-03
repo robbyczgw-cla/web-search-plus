@@ -1,6 +1,6 @@
 ---
 name: web-search-plus
-version: 2.4.0
+version: 2.4.1
 description: Unified search skill with Intelligent Auto-Routing. Uses multi-signal analysis to automatically select between Serper (Google), Tavily (Research), Exa (Neural), and You.com (RAG/Real-time) with confidence scoring.
 tags: [search, web-search, serper, tavily, exa, you, google, research, semantic-search, auto-routing, multi-provider, shopping, rag, free-tier]
 ---

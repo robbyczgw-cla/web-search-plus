@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
+from urllib.parse import quote
 
 
 # =============================================================================
@@ -1173,8 +1174,8 @@ def search_you(
         params["livecrawl"] = livecrawl
         params["livecrawl_formats"] = "markdown"
     
-    # Build URL with query params
-    query_string = "&".join(f"{k}={v}" for k, v in params.items())
+    # Build URL with query params (URL-encode values)
+    query_string = "&".join(f"{k}={quote(str(v))}" for k, v in params.items())
     url = f"{endpoint}?{query_string}"
     
     headers = {
