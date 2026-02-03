@@ -1,5 +1,83 @@
 # Changelog - Web Search Plus
 
+## [2.5.0] - 2026-02-03
+
+### 🆕 New Provider: SearXNG (Privacy-First Meta-Search)
+
+Added SearXNG as the 5th search provider, focused on privacy and self-hosted search:
+
+#### Features
+- **Privacy-Preserving**: No tracking, no profiling — your searches stay private
+- **Multi-Source Aggregation**: Queries 70+ upstream engines (Google, Bing, DuckDuckGo, etc.)
+- **$0 API Cost**: Self-hosted = unlimited queries with no API fees
+- **Diverse Results**: Get perspectives from multiple search engines in one query
+- **Customizable**: Choose which engines to use, set SafeSearch levels, language preferences
+
+#### Auto-Routing Signals
+New privacy/multi-source intent detection routes to SearXNG for:
+- Privacy queries: "private", "anonymous", "without tracking", "no tracking"
+- Multi-source: "aggregate results", "multiple sources", "diverse perspectives"
+- Budget/free: "free search", "no api cost", "self-hosted search"
+- German: "privat", "anonym", "ohne tracking", "verschiedene quellen"
+
+#### Usage Examples
+```bash
+# Auto-routed
+python3 scripts/search.py -q "search privately without tracking"  # → SearXNG
+
+# Explicit
+python3 scripts/search.py -p searxng -q "linux distros"
+python3 scripts/search.py -p searxng -q "AI news" --engines "google,bing,duckduckgo"
+python3 scripts/search.py -p searxng -q "privacy tools" --searxng-safesearch 2
+```
+
+#### Configuration
+```json
+{
+  "searxng": {
+    "instance_url": "https://your-instance.example.com",
+    "safesearch": 0,
+    "engines": null,
+    "language": "en"
+  }
+}
+```
+
+#### Setup
+SearXNG requires a self-hosted instance with JSON format enabled:
+```bash
+# Docker setup (5 minutes)
+docker run -d -p 8080:8080 searxng/searxng
+
+# Enable JSON in settings.yml:
+# search:
+#   formats: [html, json]
+
+# Set instance URL
+export SEARXNG_INSTANCE_URL="http://localhost:8080"
+```
+
+See: https://docs.searxng.org/admin/installation.html
+
+### 📊 Updated Provider Comparison
+
+| Feature | Serper | Tavily | Exa | You.com | SearXNG |
+|---------|:------:|:------:|:---:|:-------:|:-------:|
+| Privacy-First | ✗ | ✗ | ✗ | ✗ | ✓✓ |
+| Self-Hosted | ✗ | ✗ | ✗ | ✗ | ✓ |
+| API Cost | $$ | $$ | $$ | $ | **FREE** |
+| Multi-Engine | ✗ | ✗ | ✗ | ✗ | ✓ (70+) |
+
+### 🔧 Technical Changes
+
+- Added `search_searxng()` function with full error handling
+- Added `PRIVACY_SIGNALS` to QueryAnalyzer for auto-routing
+- Updated setup wizard with SearXNG option (instance URL validation)
+- Updated config.example.json with searxng section
+- New CLI args: `--searxng-url`, `--searxng-safesearch`, `--engines`, `--categories`
+
+---
+
 ## [2.4.4] - 2026-02-03
 
 ### 📝 Documentation: Provider Count Fix

@@ -12,7 +12,8 @@
       "serper",
       "tavily",
       "exa",
-      "you"
+      "you",
+      "searxng"
     ],
     "disabled_providers": [],
     "confidence_threshold": 0.3,
@@ -162,6 +163,38 @@
         "zusammenfassung",
         "aktuelle nachrichten",
         "neueste updates"
+      ],
+      "searxng": [
+        "private",
+        "privately",
+        "anonymous",
+        "anonymously",
+        "without tracking",
+        "no tracking",
+        "privacy",
+        "privacy-focused",
+        "privacy-first",
+        "duckduckgo alternative",
+        "private search",
+        "aggregate results",
+        "multiple sources",
+        "diverse results",
+        "diverse perspectives",
+        "meta search",
+        "all engines",
+        "free search",
+        "no api cost",
+        "self-hosted search",
+        "zero cost",
+        "privat",
+        "anonym",
+        "ohne tracking",
+        "datenschutz",
+        "verschiedene quellen",
+        "aus mehreren quellen",
+        "alle suchmaschinen",
+        "kostenlose suche",
+        "keine api kosten"
       ]
     }
   },
@@ -188,5 +221,12 @@
     "language": "en",
     "safesearch": "moderate",
     "include_news": true
+  },
+  "searxng": {
+    "$comment": "SearXNG requires a self-hosted instance. No API key needed, just your instance URL.",
+    "instance_url": null,
+    "safesearch": 0,
+    "engines": null,
+    "language": "en"
   }
 }

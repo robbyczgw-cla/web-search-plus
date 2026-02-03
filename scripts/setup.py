@@ -72,6 +72,22 @@ def print_provider_info():
             "free_tier": "1,000 queries/month", 
             "signup": "https://exa.ai",
             "strengths": ["Neural/semantic understanding", "Similar page discovery", "Startup/company finder", "Date filtering"]
+        },
+        {
+            "name": "You.com",
+            "emoji": "🤖",
+            "best_for": "RAG applications, real-time info, LLM-ready snippets",
+            "free_tier": "Limited free tier",
+            "signup": "https://api.you.com",
+            "strengths": ["LLM-ready snippets", "Combined web + news", "Live page crawling", "Real-time information"]
+        },
+        {
+            "name": "SearXNG",
+            "emoji": "🔒",
+            "best_for": "Privacy-first search, multi-source aggregation, $0 API cost",
+            "free_tier": "FREE (self-hosted)",
+            "signup": "https://docs.searxng.org/admin/installation.html",
+            "strengths": ["Privacy-preserving (no tracking)", "70+ search engines", "Self-hosted = $0 API cost", "Diverse results"]
         }
     ]
     
@@ -140,6 +156,79 @@ def ask_api_key(provider: str, signup_url: str) -> str:
         print(color(f"    ✓ Key saved: {masked}", Colors.GREEN))
         return key
 
+
+def ask_searxng_instance(docs_url: str) -> str:
+    """Ask for SearXNG instance URL with connection test."""
+    print()
+    print(f"  {color('SearXNG is self-hosted. You need your own instance.', Colors.DIM)}")
+    print(f"  {color('Setup guide:', Colors.DIM)} {color(docs_url, Colors.BLUE)}")
+    print()
+    print(f"  {color('Example URLs:', Colors.DIM)}")
+    print(f"    • http://localhost:8080 (local Docker)")
+    print(f"    • https://searx.your-domain.com (self-hosted)")
+    print()
+    
+    while True:
+        url = input(f"  Enter your SearXNG instance URL: ").strip()
+        
+        if not url:
+            print(color("    ⚠️  No URL entered. SearXNG will be disabled.", Colors.YELLOW))
+            return None
+        
+        # Basic URL validation
+        if not url.startswith(("http://", "https://")):
+            print(color("    ⚠️  URL must start with http:// or https://", Colors.YELLOW))
+            continue
+        
+        # Test connection
+        print(color(f"    Testing connection to {url}...", Colors.DIM))
+        try:
+            import urllib.request
+            import urllib.error
+            
+            test_url = f"{url.rstrip('/')}/search?q=test&format=json"
+            req = urllib.request.Request(
+                test_url,
+                headers={"User-Agent": "ClawdBot-WebSearchPlus/2.5", "Accept": "application/json"}
+            )
+            
+            with urllib.request.urlopen(req, timeout=10) as response:
+                data = response.read().decode("utf-8")
+                import json
+                result = json.loads(data)
+                
+                # Check if it looks like SearXNG JSON response
+                if "results" in result or "query" in result:
+                    print(color(f"    ✓ Connection successful! SearXNG instance is working.", Colors.GREEN))
+                    return url.rstrip("/")
+                else:
+                    print(color(f"    ⚠️  Connected but response doesn't look like SearXNG JSON.", Colors.YELLOW))
+                    if ask_yes_no("    Use this URL anyway?", default=False):
+                        return url.rstrip("/")
+                        
+        except urllib.error.HTTPError as e:
+            if e.code == 403:
+                print(color(f"    ⚠️  JSON API is disabled (403 Forbidden).", Colors.YELLOW))
+                print(color(f"       Enable JSON in settings.yml: search.formats: [html, json]", Colors.DIM))
+            else:
+                print(color(f"    ⚠️  HTTP error: {e.code} {e.reason}", Colors.YELLOW))
+            
+            if ask_yes_no("    Try a different URL?", default=True):
+                continue
+            return None
+            
+        except urllib.error.URLError as e:
+            print(color(f"    ⚠️  Cannot reach instance: {e.reason}", Colors.YELLOW))
+            if ask_yes_no("    Try a different URL?", default=True):
+                continue
+            return None
+            
+        except Exception as e:
+            print(color(f"    ⚠️  Error: {e}", Colors.YELLOW))
+            if ask_yes_no("    Try a different URL?", default=True):
+                continue
+            return None
+
 def ask_result_count() -> int:
     """Ask for default result count."""
     options = ["3 (fast, minimal)", "5 (balanced - recommended)", "10 (comprehensive)"]
@@ -198,21 +287,39 @@ def run_setup(skill_dir: Path, force_reset: bool = False):
     providers_info = {
         "serper": ("Serper", "https://serper.dev", "Google results, shopping, local"),
         "tavily": ("Tavily", "https://tavily.com", "Research, explanations, analysis"),
-        "exa": ("Exa", "https://exa.ai", "Semantic search, similar content")
+        "exa": ("Exa", "https://exa.ai", "Semantic search, similar content"),
+        "you": ("You.com", "https://api.you.com", "RAG applications, real-time info"),
+        "searxng": ("SearXNG", "https://docs.searxng.org/admin/installation.html", "Privacy-first, self-hosted, $0 cost")
     }
     
     for provider, (name, url, desc) in providers_info.items():
         print(f"  {color(name, Colors.BOLD)}: {desc}")
-        if ask_yes_no(f"    Enable {name}?", default=True):
-            # ===== Question 2: API key for each enabled provider =====
-            api_key = ask_api_key(name, url)
-            if api_key:
-                config[provider]["api_key"] = api_key
-                enabled_providers.append(provider)
+        
+        # Special handling for SearXNG
+        if provider == "searxng":
+            print(color("    Note: SearXNG requires a self-hosted instance (no API key needed)", Colors.DIM))
+            if ask_yes_no(f"    Do you have a SearXNG instance?", default=False):
+                instance_url = ask_searxng_instance(url)
+                if instance_url:
+                    if "searxng" not in config:
+                        config["searxng"] = {}
+                    config["searxng"]["instance_url"] = instance_url
+                    enabled_providers.append(provider)
+                else:
+                    print(color(f"    → {name} disabled (no instance URL)", Colors.DIM))
             else:
-                print(color(f"    → {name} disabled (no API key)", Colors.DIM))
+                print(color(f"    → {name} skipped (no instance)", Colors.DIM))
         else:
-            print(color(f"    → {name} disabled", Colors.DIM))
+            if ask_yes_no(f"    Enable {name}?", default=True):
+                # ===== Question 2: API key for each enabled provider =====
+                api_key = ask_api_key(name, url)
+                if api_key:
+                    config[provider]["api_key"] = api_key
+                    enabled_providers.append(provider)
+                else:
+                    print(color(f"    → {name} disabled (no API key)", Colors.DIM))
+            else:
+                print(color(f"    → {name} disabled", Colors.DIM))
         print()
     
     if not enabled_providers:
@@ -259,7 +366,7 @@ def run_setup(skill_dir: Path, force_reset: bool = False):
     config["defaults"]["max_results"] = max_results
     
     # Set disabled providers
-    all_providers = ["serper", "tavily", "exa"]
+    all_providers = ["serper", "tavily", "exa", "you", "searxng"]
     disabled = [p for p in all_providers if p not in enabled_providers]
     config["auto_routing"]["disabled_providers"] = disabled
     

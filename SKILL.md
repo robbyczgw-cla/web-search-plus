@@ -1,15 +1,15 @@
 ---
 name: web-search-plus
-version: 2.4.4
-description: Unified search skill with Intelligent Auto-Routing. Uses multi-signal analysis to automatically select between Serper (Google), Tavily (Research), Exa (Neural), and You.com (RAG/Real-time) with confidence scoring.
-tags: [search, web-search, serper, tavily, exa, you, google, research, semantic-search, auto-routing, multi-provider, shopping, rag, free-tier]
+version: 2.5.0
+description: Unified search skill with Intelligent Auto-Routing. Uses multi-signal analysis to automatically select between Serper (Google), Tavily (Research), Exa (Neural), You.com (RAG/Real-time), and SearXNG (Privacy/Self-hosted) with confidence scoring.
+tags: [search, web-search, serper, tavily, exa, you, searxng, google, research, semantic-search, auto-routing, multi-provider, shopping, rag, free-tier, privacy, self-hosted]
 ---
 
 # Web Search Plus
 
-Multi-provider web search with **Intelligent Auto-Routing**: Serper (Google), Tavily (Research), Exa (Neural), You.com (RAG/Real-time).
+Multi-provider web search with **Intelligent Auto-Routing**: Serper (Google), Tavily (Research), Exa (Neural), You.com (RAG/Real-time), SearXNG (Privacy/Self-hosted).
 
-**NEW in v2.4.2**: 🎉 **You.com provider added!** LLM-ready snippets, RAG-optimized results, unified web+news, live page crawling — perfect for AI context building and real-time information.
+**NEW in v2.5.0**: 🔒 **SearXNG provider added!** Privacy-first meta-search, 70+ upstream engines, $0 API cost, self-hosted — perfect for privacy-conscious users and multi-source aggregation.
 
 **NEW in v2.3.0**: Interactive setup wizard! Run `python3 scripts/setup.py` for guided configuration.
 
@@ -27,8 +27,8 @@ python3 scripts/setup.py
 
 The wizard will:
 1. **Explain each provider** — What they're best for, free tier limits, signup links
-2. **Ask which providers to enable** — You can use 1, 2, 3, or all 4
-3. **Collect API keys** — Keys are stored locally in `config.json` (gitignored)
+2. **Ask which providers to enable** — You can use 1, 2, 3, 4, or all 5
+3. **Collect API keys/URLs** — Stored locally in `config.json` (gitignored)
 4. **Configure defaults** — Default provider, auto-routing, result count
 
 ### What Each Provider Is Best For
@@ -39,6 +39,7 @@ The wizard will:
 | **Tavily** | Research questions, explanations, academic, full-page content | 1,000/month |
 | **Exa** | Semantic search, "similar to X", startup discovery, papers | 1,000/month |
 | **You.com** | RAG/AI context, real-time info, combined web+news, LLM-ready snippets | Limited free |
+| **SearXNG** | Privacy-preserving search, multi-source aggregation, $0 API cost | FREE (self-hosted) |
 
 ### Reconfigure Anytime
 
@@ -61,6 +62,7 @@ export SERPER_API_KEY="your-key"   # https://serper.dev
 export TAVILY_API_KEY="your-key"   # https://tavily.com  
 export EXA_API_KEY="your-key"      # https://exa.ai
 export YOU_API_KEY="your-key"      # https://api.you.com
+export SEARXNG_INSTANCE_URL="https://your-instance.example.com"  # Self-hosted
 ```
 
 **Option B: config.json** (NEW in v2.2.1)
@@ -74,7 +76,8 @@ Then add your keys:
   "serper": { "api_key": "your-serper-key" },
   "tavily": { "api_key": "your-tavily-key" },
   "exa": { "api_key": "your-exa-key" },
-  "you": { "api_key": "your-you-key" }
+  "you": { "api_key": "your-you-key" },
+  "searxng": { "instance_url": "https://your-instance.example.com" }
 }
 ```
 ⚠️ `config.json` is gitignored — your keys stay safe!
@@ -95,6 +98,7 @@ python3 scripts/search.py -q "your query"
 | Tavily | 1,000 queries/mo | https://tavily.com |
 | Exa | 1,000 queries/mo | https://exa.ai |
 | You.com | Limited free tier | https://api.you.com |
+| SearXNG | **Unlimited** (self-hosted) | https://docs.searxng.org/admin/installation.html |
 
 ---
 
@@ -127,6 +131,8 @@ python3 scripts/search.py -q "explain pros and cons of React"   # → Tavily (85
 python3 scripts/search.py -q "companies like stripe.com"        # → Exa (100% HIGH)
 python3 scripts/search.py -q "what's the latest on AI regulation" # → You.com (72% HIGH)
 python3 scripts/search.py -q "summarize current events in tech"   # → You.com (78% HIGH)
+python3 scripts/search.py -q "search privately without tracking"  # → SearXNG (90% HIGH)
+python3 scripts/search.py -q "results from multiple search engines" # → SearXNG (80% HIGH)
 ```
 
 ### How It Works
@@ -168,6 +174,16 @@ The routing engine analyzes multiple signals:
 | Real-time needs | "latest news", "current status", "right now" | HIGH |
 | Combined sources | "what's happening", "updates on", "situation" | HIGH |
 | Freshness | "as of today", "up to date", "real time" | HIGH |
+
+#### 🔒 Privacy/Multi-Source Intent → SearXNG
+| Signal Type | Examples | Weight |
+|-------------|----------|--------|
+| Privacy signals | "private", "anonymous", "without tracking", "no tracking" | VERY HIGH |
+| Privacy-focused | "privacy-first", "duckduckgo alternative", "private search" | VERY HIGH |
+| Multi-source | "aggregate results", "multiple sources", "diverse perspectives" | HIGH |
+| Meta-search | "meta search", "all engines", "from multiple engines" | VERY HIGH |
+| Budget/free | "free search", "no api cost", "self-hosted search", "zero cost" | HIGH |
+| German | "privat", "anonym", "ohne tracking", "verschiedene quellen" | HIGH |
 
 ### Confidence Scoring
 
@@ -250,22 +266,32 @@ Output:
 - 📋 **Summarization context** - "What's the latest on..."
 - 🔄 **Live crawling** - Full page content on demand (`--livecrawl`)
 
+#### → **SearXNG** (Privacy-First/Self-Hosted):
+- 🔒 **Privacy-preserving search** - No tracking, no profiling
+- 🌐 **Multi-source aggregation** - 70+ upstream engines
+- 💰 **$0 API cost** - Self-hosted, unlimited queries
+- 🎯 **Diverse perspectives** - Results from multiple engines
+- 🏠 **Self-hosted environments** - Full control over your search
+
 ---
 
 ## Provider Comparison
 
-| Feature | Serper | Tavily | Exa | You.com |
-|---------|:------:|:------:|:---:|:-------:|
-| Speed | ⚡⚡⚡ | ⚡⚡ | ⚡⚡ | ⚡⚡⚡ |
-| Factual Accuracy | ⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐ |
-| Semantic Understanding | ⭐ | ⭐⭐ | ⭐⭐⭐ | ⭐⭐ |
-| Research Quality | ⭐⭐ | ⭐⭐⭐ | ⭐⭐ | ⭐⭐ |
-| Full Page Content | ✗ | ✓ | ✓ | ✓ |
-| Shopping/Local | ✓ | ✗ | ✗ | ✗ |
-| Similar Pages | ✗ | ✗ | ✓ | ✗ |
-| Knowledge Graph | ✓ | ✗ | ✗ | ✗ |
-| News Integration | ✓ | ✗ | ✗ | ✓ |
-| RAG-Optimized | ✗ | ✓ | ✗ | ✓✓ |
+| Feature | Serper | Tavily | Exa | You.com | SearXNG |
+|---------|:------:|:------:|:---:|:-------:|:-------:|
+| Speed | ⚡⚡⚡ | ⚡⚡ | ⚡⚡ | ⚡⚡⚡ | ⚡⚡ |
+| Factual Accuracy | ⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐ |
+| Semantic Understanding | ⭐ | ⭐⭐ | ⭐⭐⭐ | ⭐⭐ | ⭐ |
+| Research Quality | ⭐⭐ | ⭐⭐⭐ | ⭐⭐ | ⭐⭐ | ⭐⭐ |
+| Full Page Content | ✗ | ✓ | ✓ | ✓ | ✗ |
+| Shopping/Local | ✓ | ✗ | ✗ | ✗ | ✓ |
+| Similar Pages | ✗ | ✗ | ✓ | ✗ | ✗ |
+| Knowledge Graph | ✓ | ✗ | ✗ | ✗ | ✗ |
+| News Integration | ✓ | ✗ | ✗ | ✓ | ✓ |
+| RAG-Optimized | ✗ | ✓ | ✗ | ✓✓ | ✗ |
+| Privacy-First | ✗ | ✗ | ✗ | ✗ | ✓✓ |
+| Self-Hosted | ✗ | ✗ | ✗ | ✗ | ✓ |
+| API Cost | $$ | $$ | $$ | $ | **FREE** |
 
 ---
 
@@ -278,6 +304,7 @@ python3 scripts/search.py -q "iPhone 16 Pro Max price"          # → Serper
 python3 scripts/search.py -q "how does HTTPS encryption work"   # → Tavily
 python3 scripts/search.py -q "startups similar to Notion"       # → Exa
 python3 scripts/search.py -q "latest updates on AI regulation"  # → You.com
+python3 scripts/search.py -q "search privately without tracking" # → SearXNG
 ```
 
 ### Explicit Provider
@@ -288,6 +315,7 @@ python3 scripts/search.py -p tavily -q "quantum computing" --depth advanced
 python3 scripts/search.py -p exa --similar-url "https://stripe.com" --category company
 python3 scripts/search.py -p you -q "current tech news" --include-news
 python3 scripts/search.py -p you -q "climate change" --livecrawl all --freshness week
+python3 scripts/search.py -p searxng -q "linux distros" --engines "google,bing,duckduckgo"
 ```
 
 ---
@@ -307,7 +335,8 @@ python3 scripts/search.py -p you -q "climate change" --livecrawl all --freshness
   "serper": {"country": "us", "language": "en"},
   "tavily": {"depth": "advanced"},
   "exa": {"type": "neural"},
-  "you": {"country": "US", "safesearch": "moderate", "include_news": true}
+  "you": {"country": "US", "safesearch": "moderate", "include_news": true},
+  "searxng": {"instance_url": "https://your-instance.example.com", "safesearch": 0}
 }
 ```
 
@@ -353,13 +382,14 @@ python3 scripts/search.py -p you -q "climate change" --livecrawl all --freshness
 ### API Keys
 
 **Q: Which API keys do I need?**
-> At minimum ONE key. You can use just Serper, just Tavily, just Exa, or just You.com. Missing keys = that provider is skipped.
+> At minimum ONE key (or SearXNG instance). You can use just Serper, just Tavily, just Exa, just You.com, or just SearXNG. Missing keys = that provider is skipped.
 
 **Q: Where do I get API keys?**
 > - Serper: https://serper.dev (2,500 free queries, no credit card)
 > - Tavily: https://tavily.com (1,000 free searches/month)
 > - Exa: https://exa.ai (1,000 free searches/month)
 > - You.com: https://api.you.com (Limited free tier for testing)
+> - SearXNG: Self-hosted, no key needed! https://docs.searxng.org/admin/installation.html
 
 **Q: How do I set API keys?**
 > Two options (both auto-load):
@@ -400,6 +430,40 @@ python3 scripts/search.py -p you -q "climate change" --livecrawl all --freshness
 **Q: Does You.com include news automatically?**
 > Yes! You.com's intelligent classification automatically includes relevant news results when your query has news intent. You can also use `--include-news` to explicitly enable it.
 
+### SearXNG Specific
+
+**Q: Do I need my own SearXNG instance?**
+> Yes! SearXNG is self-hosted. Most public instances disable the JSON API to prevent bot abuse. You need to run your own instance with JSON format enabled. See: https://docs.searxng.org/admin/installation.html
+
+**Q: How do I set up SearXNG?**
+> Docker is the easiest way:
+> ```bash
+> docker run -d -p 8080:8080 searxng/searxng
+> ```
+> Then enable JSON in `settings.yml`:
+> ```yaml
+> search:
+>   formats:
+>     - html
+>     - json
+> ```
+
+**Q: Why am I getting "403 Forbidden"?**
+> The JSON API is disabled on your instance. Enable it in `settings.yml` under `search.formats`.
+
+**Q: What's the API cost for SearXNG?**
+> **$0!** SearXNG is free and open-source. You only pay for hosting (~$5/month VPS). Unlimited queries.
+
+**Q: When should I use SearXNG?**
+> - **Privacy-sensitive queries**: No tracking, no profiling
+> - **Budget-conscious**: $0 API cost
+> - **Diverse results**: Aggregates 70+ search engines
+> - **Self-hosted requirements**: Full control over your search infrastructure
+> - **Fallback provider**: When paid APIs are rate-limited
+
+**Q: Can I limit which search engines SearXNG uses?**
+> Yes! Use `--engines google,bing,duckduckgo` to specify engines, or configure defaults in `config.json`.
+
 ### Troubleshooting
 
 **Q: "No API key found" error?**
@@ -427,3 +491,195 @@ python3 scripts/search.py -p you -q "climate change" --livecrawl all --freshness
 
 **Q: Can I see which provider was used?**
 > Yes! SOUL.md can include attribution: `[🔍 Searched with: Serper/Tavily/Exa]`
+
+---
+
+## ❓ Frequently Asked Questions
+
+### Which provider should I use?
+
+It depends on your query intent:
+
+| Query Type | Best Provider | Why |
+|------------|---------------|-----|
+| **Shopping** ("buy laptop", "cheap shoes") | **Serper** | Google Shopping, price comparisons, local stores |
+| **Research** ("how does X work?", "explain Y") | **Tavily** | Deep research, academic quality, full-page content |
+| **Startups/Papers** ("companies like X", "arxiv papers") | **Exa** | Semantic/neural search, startup discovery |
+| **RAG/Real-time** ("summarize latest", "current events") | **You.com** | LLM-ready snippets, combined web+news |
+| **Privacy** ("search without tracking") | **SearXNG** | No tracking, multi-source, self-hosted |
+
+**Tip:** Enable auto-routing and let the skill choose automatically! 🎯
+
+### Do I need all 5 providers?
+
+**No!** All providers are optional. You can use:
+- **1 provider** (e.g., just Serper for everything)
+- **2-3 providers** (e.g., Serper + You.com for most needs)
+- **All 5** (maximum flexibility + fallback options)
+
+Set `disabled_providers` in `config.json` to control which ones are active.
+
+### How much do the APIs cost?
+
+| Provider | Free Tier | Paid Plan |
+|----------|-----------|-----------|
+| **Serper** | 2,500 queries/mo | $50/mo (5,000 queries) |
+| **Tavily** | 1,000 queries/mo | $150/mo (10,000 queries) |
+| **Exa** | 1,000 queries/mo | $1,000/mo (100,000 queries) |
+| **You.com** | Limited free | ~$10/mo (varies by usage) |
+| **SearXNG** | **FREE** ✅ | Only VPS cost (~$5/mo if self-hosting) |
+
+**Budget tip:** Use SearXNG as primary + others as fallback for specialized queries!
+
+### How do I set up SearXNG?
+
+SearXNG requires a self-hosted instance. Quick setup:
+
+**Option 1: Docker (5 minutes)**
+```bash
+docker run -d -p 8080:8080 searxng/searxng
+```
+
+**Option 2: Full installation**
+See: https://docs.searxng.org/admin/installation.html
+
+**Enable JSON format:**
+Edit `settings.yml`:
+```yaml
+search:
+  formats: [html, json]  # Add 'json'!
+```
+
+**Then in web-search-plus:**
+```bash
+export SEARXNG_INSTANCE_URL="http://localhost:8080"
+python3 scripts/setup.py  # Or edit config.json directly
+```
+
+### Can I use public SearXNG instances?
+
+**Not recommended.** Most public instances (searx.space) disable JSON API to prevent abuse. You'll get `403 Forbidden` errors.
+
+**Solution:** Self-host on a VPS (~$5/mo) or use Docker locally.
+
+### Is SearXNG slower than paid APIs?
+
+**Yes, typically.** SearXNG queries multiple engines in parallel:
+- **SearXNG:** 1-3 seconds (aggregates 70+ engines)
+- **Paid APIs:** 0.5-1 second (direct access)
+
+**Trade-off:** Slower but privacy-preserving + multi-source + $0 cost.
+
+### What if my SearXNG instance is down?
+
+Auto-routing automatically falls back to the next provider in `provider_priority`. If Searx NG is first:
+```json
+"provider_priority": ["searxng", "serper", "tavily", "exa", "you"]
+```
+→ Failed SearXNG request → tries Serper → tries Tavily → etc.
+
+**Tip:** Put SearXNG **last** in priority for best reliability (use paid APIs first, SearXNG as fallback).
+
+### Can I limit which engines SearXNG uses?
+
+**Yes!** Set `engines` in `config.json`:
+```json
+{
+  "searxng": {
+    "engines": ["google", "duckduckgo", "qwant", "wikipedia"]
+  }
+}
+```
+
+Or via CLI:
+```bash
+python3 scripts/search.py -p searxng -q "linux" --engines "google,bing"
+```
+
+### How private is SearXNG really?
+
+**Depends on your instance!**
+
+| Setup | Privacy Level |
+|-------|---------------|
+| **Self-hosted (your VPS)** | ⭐⭐⭐⭐⭐ You control everything |
+| **Self-hosted (Docker local)** | ⭐⭐⭐⭐⭐ Fully private |
+| **Public instance** | ⭐⭐⭐ Depends on operator's logging policy |
+
+**Best practice:** Self-host if privacy is critical. Check your instance's logs/settings.
+
+### Which provider has the best results?
+
+**There's no "best" — it depends!**
+
+| Metric | Winner |
+|--------|--------|
+| **Most accurate for facts** | Serper (Google) |
+| **Best for research depth** | Tavily |
+| **Best for semantic queries** | Exa |
+| **Best for RAG/AI context** | You.com |
+| **Most diverse sources** | SearXNG (70+ engines) |
+| **Most private** | SearXNG (self-hosted) |
+
+**Recommendation:** Enable multiple providers + auto-routing for best overall experience.
+
+### How does auto-routing work?
+
+The skill analyzes your query for keywords and patterns:
+
+```python
+"buy cheap laptop"     → Serper (shopping signals)
+"how does AI work?"    → Tavily (research/explanation)
+"companies like X"     → Exa (semantic/similar)
+"summarize latest news" → You.com (RAG/real-time)
+"search privately"     → SearXNG (privacy signals)
+```
+
+**Confidence threshold:** Only routes if confidence > 30%. Otherwise uses default provider.
+
+**Override:** Use `-p provider` to force a specific provider.
+
+### Can I use this in production?
+
+**Yes!** Web-search-plus is production-ready:
+- ✅ Error handling with automatic fallback
+- ✅ Rate limit protection
+- ✅ Timeout handling (30s per provider)
+- ✅ API key security (.env + config.json gitignored)
+- ✅ 5 providers for redundancy
+
+**Tip:** Monitor API usage to avoid exceeding free tiers!
+
+### What if I run out of API credits?
+
+1. **Fallback chain:** Other enabled providers automatically take over
+2. **Use SearXNG:** Switch to self-hosted (unlimited queries)
+3. **Upgrade plan:** Paid tiers have higher limits
+4. **Rate limit:** Use `disabled_providers` to skip exhausted APIs temporarily
+
+### How do I update to v2.5.0?
+
+**Via ClawHub (recommended):**
+```bash
+clawhub update web-search-plus --registry "https://www.clawhub.ai" --no-input
+```
+
+**Manually:**
+```bash
+cd /root/clawd/skills/web-search-plus
+git pull origin main
+python3 scripts/setup.py  # Re-run to add SearXNG
+```
+
+### Where can I report bugs or request features?
+
+- **GitHub Issues:** https://github.com/robbyczgw-cla/web-search-plus/issues
+- **ClawHub:** https://www.clawhub.ai/skills/web-search-plus
+
+---
+
+**Still have questions?** Check the full documentation in `README.md` or run:
+```bash
+python3 scripts/search.py --help
+python3 scripts/setup.py  # Interactive wizard
+```

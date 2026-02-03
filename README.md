@@ -1,19 +1,19 @@
 # Web Search Plus
 
-> Unified multi-provider web search with **Intelligent Auto-Routing** — uses multi-signal analysis to automatically select between **Serper**, **Tavily**, **Exa**, and **You.com** with confidence scoring.
+> Unified multi-provider web search with **Intelligent Auto-Routing** — uses multi-signal analysis to automatically select between **Serper**, **Tavily**, **Exa**, **You.com**, and **SearXNG** with confidence scoring.
 
 [![ClawHub](https://img.shields.io/badge/ClawHub-web--search--plus-blue)](https://clawhub.ai)
-[![Version](https://img.shields.io/badge/version-2.4.0-green)](https://clawhub.ai)
+[![Version](https://img.shields.io/badge/version-2.5.0-green)](https://clawhub.ai)
 [![GitHub](https://img.shields.io/badge/GitHub-web--search--plus-blue)](https://github.com/robbyczgw-cla/web-search-plus)
 
 ---
 
-## 🧠 Features (v2.4.0)
+## 🧠 Features (v2.5.0)
 
-**Intelligent Multi-Signal Routing** — The skill now uses sophisticated query analysis:
+**Intelligent Multi-Signal Routing** — The skill uses sophisticated query analysis:
 
-- **Intent Classification**: Shopping vs Research vs Discovery vs RAG/Real-time
-- **Linguistic Patterns**: "how much" (price) vs "how does" (research) vs "summarize" (RAG)
+- **Intent Classification**: Shopping vs Research vs Discovery vs RAG/Real-time vs Privacy
+- **Linguistic Patterns**: "how much" (price) vs "how does" (research) vs "privately" (privacy)
 - **Entity Detection**: Product+brand combos, URLs, domains
 - **Complexity Analysis**: Long queries favor research providers
 - **Confidence Scoring**: Know how reliable the routing decision is
@@ -24,6 +24,7 @@ python3 scripts/search.py -q "how does quantum entanglement work"  # → Tavily 
 python3 scripts/search.py -q "startups similar to Notion"       # → Exa (76% HIGH)
 python3 scripts/search.py -q "companies like stripe.com"        # → Exa (100% HIGH - URL detected)
 python3 scripts/search.py -q "summarize key points on AI"       # → You.com (68% MEDIUM - RAG intent)
+python3 scripts/search.py -q "search privately without tracking" # → SearXNG (74% HIGH - privacy intent)
 ```
 
 ---
@@ -64,6 +65,13 @@ python3 scripts/search.py -q "summarize key points on AI"       # → You.com (6
 - 📋 **Summarization context** ("What's the latest...")
 - 🔄 **Live crawling** (full page content on demand)
 
+### SearXNG (Privacy-First/Self-Hosted)
+- 🔒 **Privacy-preserving search** (no tracking)
+- 🌐 **Multi-source aggregation** (70+ engines)
+- 💰 **$0 API cost** (self-hosted)
+- 🎯 **Diverse perspectives** (results from multiple engines)
+- 🏠 **Self-hosted environments** (full control)
+
 ---
 
 ## Table of Contents
@@ -94,11 +102,12 @@ The wizard explains each provider, collects your API keys, and creates `config.j
 ### Option B: Manual Setup
 
 ```bash
-# 1. Set up at least one API key
+# 1. Set up at least one API key (or SearXNG instance)
 export SERPER_API_KEY="your-key"   # https://serper.dev
 export TAVILY_API_KEY="your-key"   # https://tavily.com
 export EXA_API_KEY="your-key"      # https://exa.ai
 export YOU_API_KEY="your-key"      # https://api.you.com
+export SEARXNG_INSTANCE_URL="https://your-instance.example.com"  # Self-hosted
 
 # 2. Run a search (auto-routed!)
 python3 scripts/search.py -q "best laptop 2024"
@@ -135,6 +144,8 @@ When you don't specify a provider, the skill analyzes your query and routes it t
 | "similar to", "companies like" | **Exa** | "companies like Stripe" |
 | "startup", "Series A" | **Exa** | "AI startups Series A" |
 | "github", "research paper" | **Exa** | "LLM papers arxiv" |
+| "private", "anonymous", "no tracking" | **SearXNG** | "search privately" |
+| "multiple sources", "aggregate" | **SearXNG** | "results from all engines" |
 
 ### Examples
 
@@ -146,6 +157,7 @@ python3 scripts/search.py -q "startups like Notion"           # → Exa
 python3 scripts/search.py -q "best sushi restaurant near me"  # → Serper
 python3 scripts/search.py -q "explain attention mechanism"    # → Tavily
 python3 scripts/search.py -q "alternatives to Figma"          # → Exa
+python3 scripts/search.py -q "search privately without tracking" # → SearXNG
 ```
 
 ### Debug Auto-Routing
@@ -422,6 +434,45 @@ The `config.json` file lets you customize auto-routing and provider defaults:
 
 ---
 
+### SearXNG (Privacy-First Meta-Search)
+
+**What it is:** Open-source, self-hosted meta-search engine that aggregates results from 70+ search engines without tracking.
+
+#### Strengths
+| Strength | Description |
+|----------|-------------|
+| 🔒 **Privacy-First** | No tracking, no profiling, no data collection |
+| 🌐 **Multi-Engine** | Aggregates Google, Bing, DuckDuckGo, and 70+ more |
+| 💰 **Free** | $0 API cost (self-hosted, unlimited queries) |
+| 🎯 **Diverse Results** | Get perspectives from multiple search engines |
+| ⚙️ **Customizable** | Choose which engines to use, SafeSearch, language |
+| 🏠 **Self-Hosted** | Full control over your search infrastructure |
+
+#### Best Use Cases
+- ✅ Privacy-sensitive searches (no tracking)
+- ✅ When you want diverse results from multiple engines
+- ✅ Budget-conscious (no API fees)
+- ✅ Self-hosted/air-gapped environments
+- ✅ Fallback when paid APIs are rate-limited
+- ✅ When "aggregate everything" is the goal
+
+#### Setting Up Your Instance
+```bash
+# Docker (recommended, 5 minutes)
+docker run -d -p 8080:8080 searxng/searxng
+
+# Enable JSON API in settings.yml:
+# search:
+#   formats: [html, json]
+```
+
+1. See [docs.searxng.org](https://docs.searxng.org/admin/installation.html)
+2. Deploy via Docker, pip, or your preferred method
+3. Enable JSON format in `settings.yml`
+4. Set `SEARXNG_INSTANCE_URL` environment variable
+
+---
+
 ## Usage Examples
 
 ### Auto-Routed Searches (Recommended)
@@ -431,6 +482,7 @@ The `config.json` file lets you customize auto-routing and provider defaults:
 python3 scripts/search.py -q "Tesla Model 3 price"
 python3 scripts/search.py -q "how do neural networks learn"
 python3 scripts/search.py -q "YC startups like Stripe"
+python3 scripts/search.py -q "search privately without tracking"
 ```
 
 ### Serper Options
@@ -476,6 +528,25 @@ python3 scripts/search.py -p exa -q "YC companies" --start-date 2024-01-01
 
 # Find similar pages
 python3 scripts/search.py -p exa --similar-url "https://stripe.com" --category company
+```
+
+### SearXNG Options
+
+```bash
+# Basic search
+python3 scripts/search.py -p searxng -q "linux distros"
+
+# Specific engines only
+python3 scripts/search.py -p searxng -q "AI news" --engines "google,bing,duckduckgo"
+
+# SafeSearch (0=off, 1=moderate, 2=strict)
+python3 scripts/search.py -p searxng -q "privacy tools" --searxng-safesearch 2
+
+# With time filter
+python3 scripts/search.py -p searxng -q "open source projects" --time-range week
+
+# Custom instance URL
+python3 scripts/search.py -p searxng -q "test" --searxng-url "http://localhost:8080"
 ```
 
 ---
@@ -529,7 +600,8 @@ python3 scripts/search.py -p tavily -q "Notion vs Coda comparison" --depth advan
 
 | Tip | Savings |
 |-----|---------|
-| Use auto-routing (defaults to Serper, cheapest) | Best value |
+| Use SearXNG for routine queries | **$0 API cost** |
+| Use auto-routing (defaults to Serper, cheapest paid) | Best value |
 | Use Tavily `basic` before `advanced` | ~50% cost reduction |
 | Set appropriate `max_results` | Linear cost savings |
 | Use Exa only for semantic queries | Avoid waste |
@@ -639,15 +711,15 @@ All providers return unified JSON:
 | Option | Providers | Description |
 |--------|-----------|-------------|
 | `-q, --query` | All | Search query |
-| `-p, --provider` | All | Provider: auto, serper, tavily, exa |
+| `-p, --provider` | All | Provider: auto, serper, tavily, exa, you, searxng |
 | `-n, --max-results` | All | Max results (default: 5) |
 | `--auto` | All | Force auto-routing |
 | `--explain-routing` | All | Debug auto-routing |
 | `--images` | Serper, Tavily | Include images |
-| `--country` | Serper | Country code (default: us) |
-| `--language` | Serper | Language code (default: en) |
+| `--country` | Serper, You | Country code (default: us) |
+| `--language` | Serper, SearXNG | Language code (default: en) |
 | `--type` | Serper | search/news/images/videos/places/shopping |
-| `--time-range` | Serper | hour/day/week/month/year |
+| `--time-range` | Serper, SearXNG | hour/day/week/month/year |
 | `--depth` | Tavily | basic/advanced |
 | `--topic` | Tavily | general/news |
 | `--raw-content` | Tavily | Include full page content |
@@ -656,6 +728,10 @@ All providers return unified JSON:
 | `--start-date` | Exa | Start date (YYYY-MM-DD) |
 | `--end-date` | Exa | End date (YYYY-MM-DD) |
 | `--similar-url` | Exa | Find similar pages |
+| `--searxng-url` | SearXNG | Instance URL |
+| `--searxng-safesearch` | SearXNG | 0=off, 1=moderate, 2=strict |
+| `--engines` | SearXNG | Specific engines (google,bing,duckduckgo) |
+| `--categories` | SearXNG | Search categories (general,images,news) |
 | `--include-domains` | Tavily, Exa | Only these domains |
 | `--exclude-domains` | Tavily, Exa | Exclude these domains |
 | `--compact` | All | Compact JSON output |
