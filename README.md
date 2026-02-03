@@ -1,19 +1,19 @@
 # Web Search Plus
 
-> Unified multi-provider web search with **Intelligent Auto-Routing** — uses multi-signal analysis to automatically select between **Serper**, **Tavily**, and **Exa** with confidence scoring.
+> Unified multi-provider web search with **Intelligent Auto-Routing** — uses multi-signal analysis to automatically select between **Serper**, **Tavily**, **Exa**, and **You.com** with confidence scoring.
 
 [![ClawHub](https://img.shields.io/badge/ClawHub-web--search--plus-blue)](https://clawhub.ai)
-[![Version](https://img.shields.io/badge/version-2.3.0-green)](https://clawhub.ai)
+[![Version](https://img.shields.io/badge/version-2.4.0-green)](https://clawhub.ai)
 [![GitHub](https://img.shields.io/badge/GitHub-web--search--plus-blue)](https://github.com/robbyczgw-cla/web-search-plus)
 
 ---
 
-## 🧠 Features (v2.3.0)
+## 🧠 Features (v2.4.0)
 
 **Intelligent Multi-Signal Routing** — The skill now uses sophisticated query analysis:
 
-- **Intent Classification**: Shopping vs Research vs Discovery
-- **Linguistic Patterns**: "how much" (price) vs "how does" (research)
+- **Intent Classification**: Shopping vs Research vs Discovery vs RAG/Real-time
+- **Linguistic Patterns**: "how much" (price) vs "how does" (research) vs "summarize" (RAG)
 - **Entity Detection**: Product+brand combos, URLs, domains
 - **Complexity Analysis**: Long queries favor research providers
 - **Confidence Scoring**: Know how reliable the routing decision is
@@ -23,6 +23,7 @@ python3 scripts/search.py -q "how much does iPhone 16 cost"     # → Serper (68
 python3 scripts/search.py -q "how does quantum entanglement work"  # → Tavily (86% HIGH)
 python3 scripts/search.py -q "startups similar to Notion"       # → Exa (76% HIGH)
 python3 scripts/search.py -q "companies like stripe.com"        # → Exa (100% HIGH - URL detected)
+python3 scripts/search.py -q "summarize key points on AI"       # → You.com (68% MEDIUM - RAG intent)
 ```
 
 ---
@@ -55,6 +56,13 @@ python3 scripts/search.py -q "companies like stripe.com"        # → Exa (100% 
 - 📝 **Research papers**
 - 💻 **GitHub projects**
 - 📅 **Date-specific content**
+
+### You.com (RAG/Real-time)
+- 🤖 **RAG applications** (LLM-ready snippets)
+- 📰 **Combined web + news** (single API call)
+- ⚡ **Real-time information** (current events)
+- 📋 **Summarization context** ("What's the latest...")
+- 🔄 **Live crawling** (full page content on demand)
 
 ---
 
@@ -90,6 +98,7 @@ The wizard explains each provider, collects your API keys, and creates `config.j
 export SERPER_API_KEY="your-key"   # https://serper.dev
 export TAVILY_API_KEY="your-key"   # https://tavily.com
 export EXA_API_KEY="your-key"      # https://exa.ai
+export YOU_API_KEY="your-key"      # https://api.you.com
 
 # 2. Run a search (auto-routed!)
 python3 scripts/search.py -q "best laptop 2024"

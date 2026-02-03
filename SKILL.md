@@ -1,13 +1,13 @@
 ---
 name: web-search-plus
-version: 2.3.0
-description: Unified search skill with Intelligent Auto-Routing. Uses multi-signal analysis to automatically select between Serper (Google), Tavily (Research), and Exa (Neural) with confidence scoring.
-tags: [search, web-search, serper, tavily, exa, google, research, semantic-search, auto-routing, multi-provider, shopping, free-tier]
+version: 2.4.0
+description: Unified search skill with Intelligent Auto-Routing. Uses multi-signal analysis to automatically select between Serper (Google), Tavily (Research), Exa (Neural), and You.com (RAG/Real-time) with confidence scoring.
+tags: [search, web-search, serper, tavily, exa, you, google, research, semantic-search, auto-routing, multi-provider, shopping, rag, free-tier]
 ---
 
 # Web Search Plus
 
-Multi-provider web search with **Intelligent Auto-Routing**: Serper (Google), Tavily (Research), Exa (Neural).
+Multi-provider web search with **Intelligent Auto-Routing**: Serper (Google), Tavily (Research), Exa (Neural), You.com (RAG/Real-time).
 
 **NEW in v2.3.0**: Interactive setup wizard! Run `python3 scripts/setup.py` for guided configuration.
 
@@ -36,6 +36,7 @@ The wizard will:
 | **Serper** | Google results, shopping, prices, local businesses, news | 2,500/month |
 | **Tavily** | Research questions, explanations, academic, full-page content | 1,000/month |
 | **Exa** | Semantic search, "similar to X", startup discovery, papers | 1,000/month |
+| **You.com** | RAG/AI context, real-time info, combined web+news, LLM-ready snippets | Limited free |
 
 ### Reconfigure Anytime
 
@@ -57,6 +58,7 @@ python3 scripts/setup.py --reset
 export SERPER_API_KEY="your-key"   # https://serper.dev
 export TAVILY_API_KEY="your-key"   # https://tavily.com  
 export EXA_API_KEY="your-key"      # https://exa.ai
+export YOU_API_KEY="your-key"      # https://api.you.com
 ```
 
 **Option B: config.json** (NEW in v2.2.1)
@@ -69,7 +71,8 @@ Then add your keys:
 {
   "serper": { "api_key": "your-serper-key" },
   "tavily": { "api_key": "your-tavily-key" },
-  "exa": { "api_key": "your-exa-key" }
+  "exa": { "api_key": "your-exa-key" },
+  "you": { "api_key": "your-you-key" }
 }
 ```
 ⚠️ `config.json` is gitignored — your keys stay safe!
@@ -89,6 +92,7 @@ python3 scripts/search.py -q "your query"
 | Serper | 2,500 queries/mo | https://serper.dev |
 | Tavily | 1,000 queries/mo | https://tavily.com |
 | Exa | 1,000 queries/mo | https://exa.ai |
+| You.com | Limited free tier | https://api.you.com |
 
 ---
 
@@ -119,6 +123,8 @@ python3 scripts/search.py -q "startups similar to Notion"       # → Exa (76% H
 python3 scripts/search.py -q "MacBook Pro M3 specs review"      # → Serper (70% HIGH)
 python3 scripts/search.py -q "explain pros and cons of React"   # → Tavily (85% HIGH)
 python3 scripts/search.py -q "companies like stripe.com"        # → Exa (100% HIGH)
+python3 scripts/search.py -q "what's the latest on AI regulation" # → You.com (72% HIGH)
+python3 scripts/search.py -q "summarize current events in tech"   # → You.com (78% HIGH)
 ```
 
 ### How It Works
@@ -151,6 +157,15 @@ The routing engine analyzes multiple signals:
 | URL detection | Any URL or domain (stripe.com) | VERY HIGH |
 | Academic | "arxiv", "research papers", "github projects" | HIGH |
 | Funding | "Series A", "YC", "funded startup" | HIGH |
+
+#### 🤖 RAG/Real-time Intent → You.com
+| Signal Type | Examples | Weight |
+|-------------|----------|--------|
+| RAG context | "context for", "rag", "summarize", "tldr" | VERY HIGH |
+| Information synthesis | "key points", "main takeaways", "quick overview" | HIGH |
+| Real-time needs | "latest news", "current status", "right now" | HIGH |
+| Combined sources | "what's happening", "updates on", "situation" | HIGH |
+| Freshness | "as of today", "up to date", "real time" | HIGH |
 
 ### Confidence Scoring
 
@@ -226,20 +241,29 @@ Output:
 - 💻 **GitHub projects** - `--category github`
 - 📅 **Date-specific** - `--start-date` / `--end-date`
 
+#### → **You.com** (RAG/Real-time):
+- 🤖 **RAG applications** - Pre-extracted LLM-ready snippets
+- 📰 **Combined web + news** - Single API call for both
+- ⚡ **Real-time info** - Current events, status updates
+- 📋 **Summarization context** - "What's the latest on..."
+- 🔄 **Live crawling** - Full page content on demand (`--livecrawl`)
+
 ---
 
 ## Provider Comparison
 
-| Feature | Serper | Tavily | Exa |
-|---------|:------:|:------:|:---:|
-| Speed | ⚡⚡⚡ | ⚡⚡ | ⚡⚡ |
-| Factual Accuracy | ⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐ |
-| Semantic Understanding | ⭐ | ⭐⭐ | ⭐⭐⭐ |
-| Research Quality | ⭐⭐ | ⭐⭐⭐ | ⭐⭐ |
-| Full Page Content | ✗ | ✓ | ✓ |
-| Shopping/Local | ✓ | ✗ | ✗ |
-| Similar Pages | ✗ | ✗ | ✓ |
-| Knowledge Graph | ✓ | ✗ | ✗ |
+| Feature | Serper | Tavily | Exa | You.com |
+|---------|:------:|:------:|:---:|:-------:|
+| Speed | ⚡⚡⚡ | ⚡⚡ | ⚡⚡ | ⚡⚡⚡ |
+| Factual Accuracy | ⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐ |
+| Semantic Understanding | ⭐ | ⭐⭐ | ⭐⭐⭐ | ⭐⭐ |
+| Research Quality | ⭐⭐ | ⭐⭐⭐ | ⭐⭐ | ⭐⭐ |
+| Full Page Content | ✗ | ✓ | ✓ | ✓ |
+| Shopping/Local | ✓ | ✗ | ✗ | ✗ |
+| Similar Pages | ✗ | ✗ | ✓ | ✗ |
+| Knowledge Graph | ✓ | ✗ | ✗ | ✗ |
+| News Integration | ✓ | ✗ | ✗ | ✓ |
+| RAG-Optimized | ✗ | ✓ | ✗ | ✓✓ |
 
 ---
 
@@ -251,6 +275,7 @@ Output:
 python3 scripts/search.py -q "iPhone 16 Pro Max price"          # → Serper
 python3 scripts/search.py -q "how does HTTPS encryption work"   # → Tavily
 python3 scripts/search.py -q "startups similar to Notion"       # → Exa
+python3 scripts/search.py -q "latest updates on AI regulation"  # → You.com
 ```
 
 ### Explicit Provider
@@ -259,6 +284,8 @@ python3 scripts/search.py -q "startups similar to Notion"       # → Exa
 python3 scripts/search.py -p serper -q "weather Berlin" --type weather
 python3 scripts/search.py -p tavily -q "quantum computing" --depth advanced
 python3 scripts/search.py -p exa --similar-url "https://stripe.com" --category company
+python3 scripts/search.py -p you -q "current tech news" --include-news
+python3 scripts/search.py -p you -q "climate change" --livecrawl all --freshness week
 ```
 
 ---
@@ -277,7 +304,8 @@ python3 scripts/search.py -p exa --similar-url "https://stripe.com" --category c
   },
   "serper": {"country": "us", "language": "en"},
   "tavily": {"depth": "advanced"},
-  "exa": {"type": "neural"}
+  "exa": {"type": "neural"},
+  "you": {"country": "US", "safesearch": "moderate", "include_news": true}
 }
 ```
 
@@ -323,12 +351,13 @@ python3 scripts/search.py -p exa --similar-url "https://stripe.com" --category c
 ### API Keys
 
 **Q: Which API keys do I need?**
-> At minimum ONE key. You can use just Serper, just Tavily, or all three. Missing keys = that provider is skipped.
+> At minimum ONE key. You can use just Serper, just Tavily, just Exa, or just You.com. Missing keys = that provider is skipped.
 
 **Q: Where do I get API keys?**
 > - Serper: https://serper.dev (2,500 free queries, no credit card)
 > - Tavily: https://tavily.com (1,000 free searches/month)
 > - Exa: https://exa.ai (1,000 free searches/month)
+> - You.com: https://api.you.com (Limited free tier for testing)
 
 **Q: How do I set API keys?**
 > Two options (both auto-load):
@@ -353,6 +382,21 @@ python3 scripts/search.py -p exa --similar-url "https://stripe.com" --category c
 
 **Q: What's the confidence threshold?**
 > Default: 0.3 (30%). Below this = low confidence, uses fallback. Adjustable in config.json.
+
+### You.com Specific
+
+**Q: When should I use You.com over other providers?**
+> You.com excels at:
+> - **RAG applications**: Pre-extracted snippets ready for LLM consumption
+> - **Real-time information**: Current events, breaking news, status updates
+> - **Combined sources**: Web + news results in a single API call
+> - **Summarization tasks**: "What's the latest on...", "Key points about..."
+
+**Q: What's the livecrawl feature?**
+> You.com can fetch full page content on-demand. Use `--livecrawl web` for web results, `--livecrawl news` for news articles, or `--livecrawl all` for both. Content is returned in Markdown format.
+
+**Q: Does You.com include news automatically?**
+> Yes! You.com's intelligent classification automatically includes relevant news results when your query has news intent. You can also use `--include-news` to explicitly enable it.
 
 ### Troubleshooting
 

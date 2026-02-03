@@ -1,5 +1,63 @@
 # Changelog - Web Search Plus
 
+## [2.4.0] - 2026-02-03
+
+### 🆕 New Provider: You.com
+
+Added You.com as the 4th search provider, optimized for RAG applications and real-time information:
+
+#### Features
+- **LLM-Ready Snippets**: Pre-extracted, query-aware text excerpts perfect for feeding into AI models
+- **Unified Web + News**: Get both web pages and news articles in a single API call
+- **Live Crawling**: Fetch full page content on-demand in Markdown format (`--livecrawl`)
+- **Automatic News Classification**: Intelligently includes news results based on query intent
+- **Freshness Controls**: Filter by recency (day, week, month, year, or date range)
+- **SafeSearch Support**: Content filtering (off, moderate, strict)
+
+#### Auto-Routing Signals
+New RAG/Real-time intent detection routes to You.com for:
+- RAG context queries: "summarize", "key points", "tldr", "context for"
+- Real-time info: "latest news", "current status", "right now", "what's happening"
+- Information synthesis: "updates on", "situation", "main takeaways"
+
+#### Usage Examples
+```bash
+# Auto-routed
+python3 scripts/search.py -q "summarize key points about AI regulation"  # → You.com
+
+# Explicit
+python3 scripts/search.py -p you -q "climate change" --livecrawl all
+python3 scripts/search.py -p you -q "tech news" --freshness week
+```
+
+#### Configuration
+```json
+{
+  "you": {
+    "country": "US",
+    "language": "en",
+    "safesearch": "moderate",
+    "include_news": true
+  }
+}
+```
+
+#### API Key Setup
+```bash
+export YOU_API_KEY="your-key"  # Get from https://api.you.com
+```
+
+### 📊 Updated Provider Comparison
+
+| Feature | Serper | Tavily | Exa | You.com |
+|---------|:------:|:------:|:---:|:-------:|
+| Speed | ⚡⚡⚡ | ⚡⚡ | ⚡⚡ | ⚡⚡⚡ |
+| News Integration | ✓ | ✗ | ✗ | ✓ |
+| RAG-Optimized | ✗ | ✓ | ✗ | ✓✓ |
+| Full Page Content | ✗ | ✓ | ✓ | ✓ |
+
+---
+
 ## [2.1.5] - 2026-01-27
 
 ### 📝 Documentation

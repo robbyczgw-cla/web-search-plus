@@ -11,7 +11,8 @@
     "provider_priority": [
       "serper",
       "tavily",
-      "exa"
+      "exa",
+      "you"
     ],
     "disabled_providers": [],
     "confidence_threshold": 0.3,
@@ -133,6 +134,34 @@
         "konkurrenten",
         "vergleichbar mit",
         "andere unternehmen"
+      ],
+      "you": [
+        "rag",
+        "context for",
+        "summarize",
+        "brief",
+        "quick overview",
+        "tldr",
+        "key points",
+        "key facts",
+        "main points",
+        "main takeaways",
+        "latest news",
+        "latest updates",
+        "current events",
+        "current situation",
+        "current status",
+        "right now",
+        "as of today",
+        "up to date",
+        "real time",
+        "what's happening",
+        "what's the latest",
+        "updates on",
+        "status of",
+        "zusammenfassung",
+        "aktuelle nachrichten",
+        "neueste updates"
       ]
     }
   },
@@ -153,5 +182,11 @@
     "category": null,
     "include_domains": [],
     "exclude_domains": []
+  },
+  "you": {
+    "country": "US",
+    "language": "en",
+    "safesearch": "moderate",
+    "include_news": true
   }
 }
