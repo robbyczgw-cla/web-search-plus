@@ -1155,7 +1155,7 @@ def search_you(
         include_news: Include news results when relevant (default True)
         livecrawl: Fetch full page content: "web", "news", or "all"
     """
-    endpoint = "https://api.ydc-index.io/search"
+    endpoint = "https://ydc-index.io/v1/search"
     
     # Build query parameters
     params = {
@@ -1179,9 +1179,9 @@ def search_you(
     url = f"{endpoint}?{query_string}"
     
     headers = {
-        "X-API-Key": api_key,
+        "X-API-KEY": api_key,
         "Accept": "application/json",
-        "User-Agent": "ClawdBot-WebSearchPlus/2.3",
+        "User-Agent": "ClawdBot-WebSearchPlus/2.4",
     }
     
     # Make GET request (You.com uses GET, not POST)

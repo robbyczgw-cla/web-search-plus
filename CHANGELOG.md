@@ -1,5 +1,14 @@
 # Changelog - Web Search Plus
 
+## [2.4.2] - 2026-02-03
+
+### 🐛 Critical Fix: You.com API Configuration
+
+- **Fixed:** Incorrect hostname (`api.ydc-index.io` → `ydc-index.io`)
+- **Fixed:** Incorrect header name (`X-API-Key` → `X-API-KEY` uppercase)
+- **Impact:** You.com now works correctly - was giving 403 Forbidden before
+- **Status:** ✅ Fully tested and working
+
 ## [2.4.1] - 2026-02-03
 
 ### 🐛 Bugfix: You.com URL Encoding
