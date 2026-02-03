@@ -1,5 +1,12 @@
 # Changelog - Web Search Plus
 
+## [2.4.3] - 2026-02-03
+
+### 📝 Documentation: Updated README
+
+- **Added:** "NEW in v2.4.2" badge for You.com in SKILL.md
+- **Impact:** ClawHub README now properly highlights You.com as new feature
+
 ## [2.4.2] - 2026-02-03
 
 ### 🐛 Critical Fix: You.com API Configuration
