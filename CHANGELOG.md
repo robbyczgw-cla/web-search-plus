@@ -1,5 +1,9 @@
 # Changelog - Web Search Plus
 
+## [2.6.1] - 2026-02-04
+
+- Privacy cleanup: removed hardcoded paths and personal info from docs
+
 ## [2.5.0] - 2026-02-03
 
 ### 🆕 New Provider: SearXNG (Privacy-First Meta-Search)

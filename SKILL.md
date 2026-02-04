@@ -1,6 +1,6 @@
 ---
 name: web-search-plus
-version: 2.6.0
+version: 2.6.1
 description: Unified search skill with Intelligent Auto-Routing. Uses multi-signal analysis to automatically select between Serper (Google), Tavily (Research), Exa (Neural), You.com (RAG/Real-time), and SearXNG (Privacy/Self-hosted) with confidence scoring.
 tags: [search, web-search, serper, tavily, exa, you, searxng, google, research, semantic-search, auto-routing, multi-provider, shopping, rag, free-tier, privacy, self-hosted]
 metadata: {"clawdbot":{"requires":{"bins":["python3","bash"],"env":["SERPER_API_KEY","TAVILY_API_KEY","EXA_API_KEY","YOU_API_KEY","SEARXNG_INSTANCE_URL"]},"primaryEnv":"SERPER_API_KEY"}}

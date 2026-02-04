@@ -212,7 +212,7 @@ clawhub update web-search-plus --registry "https://www.clawhub.ai" --no-input
 
 **Manually:**
 ```bash
-cd /root/clawd/skills/web-search-plus
+cd /path/to/workspace/skills/web-search-plus/
 git pull origin main
 python3 scripts/setup.py  # Re-run to configure new features
 ```
