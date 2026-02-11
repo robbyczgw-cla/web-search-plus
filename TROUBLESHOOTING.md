@@ -1,5 +1,59 @@
 # Troubleshooting Guide
 
+## Caching Issues (v2.6.5+)
+
+### Cache not working / always fetching fresh
+
+**Symptoms:**
+- Every request hits the API
+- `"cached": false` even for repeated queries
+
+**Solutions:**
+1. Check cache directory exists and is writable:
+   ```bash
+   ls -la .cache/  # Should exist in skill directory
+   ```
+2. Verify `--no-cache` isn't being passed
+3. Check disk space isn't full
+4. Ensure query is EXACTLY the same (including provider and max_results)
+
+### Stale results from cache
+
+**Symptoms:**
+- Getting outdated information
+- Cache TTL seems too long
+
+**Solutions:**
+1. Use `--no-cache` to force fresh results
+2. Reduce TTL: `--cache-ttl 1800` (30 minutes)
+3. Clear cache: `python3 scripts/search.py --clear-cache`
+
+### Cache growing too large
+
+**Symptoms:**
+- Disk space filling up
+- Many .json files in `.cache/`
+
+**Solutions:**
+1. Clear cache periodically:
+   ```bash
+   python3 scripts/search.py --clear-cache
+   ```
+2. Set up a cron job to clear weekly
+3. Use a smaller TTL so entries expire faster
+
+### "Permission denied" when caching
+
+**Symptoms:**
+- Cache write errors in stderr
+- Searches work but don't cache
+
+**Solutions:**
+1. Check directory permissions: `chmod 755 .cache/`
+2. Use custom cache dir: `export WSP_CACHE_DIR="/tmp/wsp-cache"`
+
+---
+
 ## Common Issues
 
 ### "No API key found" error

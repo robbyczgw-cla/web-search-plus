@@ -1,5 +1,46 @@
 # Frequently Asked Questions
 
+## Caching (NEW in v2.6.5!)
+
+### How does caching work?
+Search results are automatically cached locally for 1 hour (3600 seconds). When you make the same query again, you get instant results at $0 API cost. The cache key is based on: query text + provider + max_results.
+
+### Where are cached results stored?
+In `.cache/` directory inside the skill folder by default. Override with `WSP_CACHE_DIR` environment variable:
+```bash
+export WSP_CACHE_DIR="/path/to/custom/cache"
+```
+
+### How do I see cache stats?
+```bash
+python3 scripts/search.py --cache-stats
+```
+This shows total entries, size, oldest/newest entries, and breakdown by provider.
+
+### How do I clear the cache?
+```bash
+python3 scripts/search.py --clear-cache
+```
+
+### Can I change the cache TTL?
+Yes! Default is 3600 seconds (1 hour). Set a custom TTL per request:
+```bash
+python3 scripts/search.py -q "query" --cache-ttl 7200  # 2 hours
+```
+
+### How do I skip the cache?
+Use `--no-cache` to always fetch fresh results:
+```bash
+python3 scripts/search.py -q "query" --no-cache
+```
+
+### How do I know if a result was cached?
+The response includes:
+- `"cached": true/false` — whether result came from cache
+- `"cache_age_seconds": 1234` — how old the cached result is (when cached)
+
+---
+
 ## General
 
 ### How does auto-routing decide which provider to use?

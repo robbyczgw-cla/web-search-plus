@@ -3,12 +3,12 @@
 > Unified multi-provider web search with **Intelligent Auto-Routing** — uses multi-signal analysis to automatically select between **Serper**, **Tavily**, **Exa**, **You.com**, and **SearXNG** with confidence scoring.
 
 [![ClawHub](https://img.shields.io/badge/ClawHub-web--search--plus-blue)](https://clawhub.ai)
-[![Version](https://img.shields.io/badge/version-2.5.2-green)](https://clawhub.ai)
+[![Version](https://img.shields.io/badge/version-2.6.5-green)](https://clawhub.ai)
 [![GitHub](https://img.shields.io/badge/GitHub-web--search--plus-blue)](https://github.com/robbyczgw-cla/web-search-plus)
 
 ---
 
-## 🧠 Features (v2.5.0)
+## 🧠 Features (v2.6.5)
 
 **Intelligent Multi-Signal Routing** — The skill uses sophisticated query analysis:
 
@@ -159,6 +159,33 @@ python3 scripts/search.py -q "explain attention mechanism"    # → Tavily
 python3 scripts/search.py -q "alternatives to Figma"          # → Exa
 python3 scripts/search.py -q "search privately without tracking" # → SearXNG
 ```
+
+### Result Caching (NEW in v2.6.5!)
+
+Search results are **automatically cached** for 1 hour to save API costs:
+
+```bash
+# First request: fetches from API ($)
+python3 scripts/search.py -q "AI startups 2024"
+
+# Second request: uses cache (FREE!)
+python3 scripts/search.py -q "AI startups 2024"
+# Output includes: "cached": true
+
+# Bypass cache (force fresh results)
+python3 scripts/search.py -q "AI startups 2024" --no-cache
+
+# View cache stats
+python3 scripts/search.py --cache-stats
+
+# Clear all cached results
+python3 scripts/search.py --clear-cache
+
+# Custom TTL (in seconds, default: 3600 = 1 hour)
+python3 scripts/search.py -q "query" --cache-ttl 7200
+```
+
+**Cache location:** `.cache/` in skill directory (override with `WSP_CACHE_DIR` environment variable)
 
 ### Debug Auto-Routing
 
