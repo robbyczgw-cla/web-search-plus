@@ -21,15 +21,206 @@ Examples:
 """
 
 import argparse
+import hashlib
 import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
+
+
+# =============================================================================
+# Result Caching
+# =============================================================================
+
+CACHE_DIR = Path("/root/clawd/memory/search-cache")
+DEFAULT_CACHE_TTL = 3600  # 1 hour in seconds
+
+
+def _get_cache_key(query: str, provider: str, max_results: int) -> str:
+    """Generate a unique cache key from query parameters."""
+    key_string = f"{query}|{provider}|{max_results}"
+    return hashlib.sha256(key_string.encode("utf-8")).hexdigest()[:32]
+
+
+def _get_cache_path(cache_key: str) -> Path:
+    """Get the file path for a cache entry."""
+    return CACHE_DIR / f"{cache_key}.json"
+
+
+def _ensure_cache_dir() -> None:
+    """Create cache directory if it doesn't exist."""
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def cache_get(query: str, provider: str, max_results: int, ttl: int = DEFAULT_CACHE_TTL) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve cached search results if they exist and are not expired.
+    
+    Args:
+        query: The search query
+        provider: The search provider
+        max_results: Maximum results requested
+        ttl: Time-to-live in seconds (default: 1 hour)
+    
+    Returns:
+        Cached result dict or None if not found/expired
+    """
+    cache_key = _get_cache_key(query, provider, max_results)
+    cache_path = _get_cache_path(cache_key)
+    
+    if not cache_path.exists():
+        return None
+    
+    try:
+        with open(cache_path, "r", encoding="utf-8") as f:
+            cached = json.load(f)
+        
+        cached_time = cached.get("_cache_timestamp", 0)
+        if time.time() - cached_time > ttl:
+            # Cache expired, remove it
+            cache_path.unlink(missing_ok=True)
+            return None
+        
+        return cached
+    except (json.JSONDecodeError, IOError, KeyError):
+        # Corrupted cache file, remove it
+        cache_path.unlink(missing_ok=True)
+        return None
+
+
+def cache_put(query: str, provider: str, max_results: int, result: Dict[str, Any]) -> None:
+    """
+    Store search results in cache.
+    
+    Args:
+        query: The search query
+        provider: The search provider  
+        max_results: Maximum results requested
+        result: The search result to cache
+    """
+    _ensure_cache_dir()
+    
+    cache_key = _get_cache_key(query, provider, max_results)
+    cache_path = _get_cache_path(cache_key)
+    
+    # Add cache metadata
+    cached_result = result.copy()
+    cached_result["_cache_timestamp"] = time.time()
+    cached_result["_cache_key"] = cache_key
+    cached_result["_cache_query"] = query
+    cached_result["_cache_provider"] = provider
+    cached_result["_cache_max_results"] = max_results
+    
+    try:
+        with open(cache_path, "w", encoding="utf-8") as f:
+            json.dump(cached_result, f, ensure_ascii=False, indent=2)
+    except IOError as e:
+        # Non-fatal: log to stderr but don't fail
+        print(json.dumps({"cache_write_error": str(e)}), file=sys.stderr)
+
+
+def cache_clear() -> Dict[str, Any]:
+    """
+    Clear all cached results.
+    
+    Returns:
+        Stats about what was cleared
+    """
+    if not CACHE_DIR.exists():
+        return {"cleared": 0, "message": "Cache directory does not exist"}
+    
+    count = 0
+    size_freed = 0
+    
+    for cache_file in CACHE_DIR.glob("*.json"):
+        try:
+            size_freed += cache_file.stat().st_size
+            cache_file.unlink()
+            count += 1
+        except IOError:
+            pass
+    
+    return {
+        "cleared": count,
+        "size_freed_bytes": size_freed,
+        "size_freed_kb": round(size_freed / 1024, 2),
+        "message": f"Cleared {count} cached entries"
+    }
+
+
+def cache_stats() -> Dict[str, Any]:
+    """
+    Get statistics about the cache.
+    
+    Returns:
+        Dict with cache statistics
+    """
+    if not CACHE_DIR.exists():
+        return {
+            "total_entries": 0,
+            "total_size_bytes": 0,
+            "total_size_kb": 0,
+            "oldest": None,
+            "newest": None,
+            "cache_dir": str(CACHE_DIR),
+            "exists": False
+        }
+    
+    entries = list(CACHE_DIR.glob("*.json"))
+    total_size = 0
+    oldest_time = None
+    newest_time = None
+    oldest_query = None
+    newest_query = None
+    provider_counts = {}
+    
+    for cache_file in entries:
+        try:
+            stat = cache_file.stat()
+            total_size += stat.st_size
+            
+            with open(cache_file, "r", encoding="utf-8") as f:
+                cached = json.load(f)
+            
+            ts = cached.get("_cache_timestamp", 0)
+            query = cached.get("_cache_query", "unknown")
+            provider = cached.get("_cache_provider", "unknown")
+            
+            provider_counts[provider] = provider_counts.get(provider, 0) + 1
+            
+            if oldest_time is None or ts < oldest_time:
+                oldest_time = ts
+                oldest_query = query
+            if newest_time is None or ts > newest_time:
+                newest_time = ts
+                newest_query = query
+        except (json.JSONDecodeError, IOError):
+            pass
+    
+    return {
+        "total_entries": len(entries),
+        "total_size_bytes": total_size,
+        "total_size_kb": round(total_size / 1024, 2),
+        "providers": provider_counts,
+        "oldest": {
+            "timestamp": oldest_time,
+            "age_seconds": int(time.time() - oldest_time) if oldest_time else None,
+            "query": oldest_query
+        } if oldest_time else None,
+        "newest": {
+            "timestamp": newest_time,
+            "age_seconds": int(time.time() - newest_time) if newest_time else None,
+            "query": newest_query
+        } if newest_time else None,
+        "cache_dir": str(CACHE_DIR),
+        "exists": True
+    }
 
 
 # =============================================================================
@@ -1696,7 +1887,43 @@ Full docs: See README.md and SKILL.md
     # Output
     parser.add_argument("--compact", action="store_true")
     
+    # Caching options
+    parser.add_argument(
+        "--cache-ttl",
+        type=int,
+        default=DEFAULT_CACHE_TTL,
+        help=f"Cache TTL in seconds (default: {DEFAULT_CACHE_TTL} = 1 hour)"
+    )
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Bypass cache (always fetch fresh results)"
+    )
+    parser.add_argument(
+        "--clear-cache",
+        action="store_true",
+        help="Clear all cached results and exit"
+    )
+    parser.add_argument(
+        "--cache-stats",
+        action="store_true",
+        help="Show cache statistics and exit"
+    )
+    
     args = parser.parse_args()
+    
+    # Handle cache management commands first (before query validation)
+    if args.clear_cache:
+        result = cache_clear()
+        indent = None if args.compact else 2
+        print(json.dumps(result, indent=indent, ensure_ascii=False))
+        return
+    
+    if args.cache_stats:
+        result = cache_stats()
+        indent = None if args.compact else 2
+        print(json.dumps(result, indent=indent, ensure_ascii=False))
+        return
     
     if not args.query and not args.similar_url:
         parser.error("--query is required (unless using --similar-url with Exa)")
@@ -1815,12 +2042,34 @@ Full docs: See README.md and SKILL.md
         else:
             raise ValueError(f"Unknown provider: {prov}")
     
-    # Try providers with fallback on error
+    # Check cache first (unless --no-cache is set)
+    cached_result = None
+    cache_hit = False
+    if not args.no_cache and args.query:
+        cached_result = cache_get(
+            query=args.query,
+            provider=provider,
+            max_results=args.max_results,
+            ttl=args.cache_ttl
+        )
+        if cached_result:
+            cache_hit = True
+            # Remove cache metadata from output but note it was cached
+            result = {k: v for k, v in cached_result.items() if not k.startswith("_cache_")}
+            result["cached"] = True
+            result["cache_age_seconds"] = int(time.time() - cached_result.get("_cache_timestamp", 0))
+    
+    # Try providers with fallback on error (if not cached)
     errors = []
-    result = None
     successful_provider = None
     
+    if not cache_hit:
+        result = None
+    
     for current_provider in providers_to_try:
+        if cache_hit:
+            successful_provider = provider
+            break  # Already have cached result
         try:
             result = execute_search(current_provider)
             successful_provider = current_provider
@@ -1849,6 +2098,21 @@ Full docs: See README.md and SKILL.md
             routing_info["fallback_errors"] = errors[:-1] if errors else []
         
         result["routing"] = routing_info
+        
+        # Cache the result if it wasn't a cache hit (and caching is enabled)
+        if not cache_hit and not args.no_cache and args.query:
+            cache_put(
+                query=args.query,
+                provider=successful_provider or provider,
+                max_results=args.max_results,
+                result=result
+            )
+        
+        # Add cache indicator to output
+        if cache_hit:
+            result["cached"] = True
+        else:
+            result["cached"] = False
         
         indent = None if args.compact else 2
         print(json.dumps(result, indent=indent, ensure_ascii=False))
