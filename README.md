@@ -38,7 +38,7 @@ python3 scripts/search.py -q "search privately without tracking" # → SearXNG (
 - ✅ Default fallback
 
 ### Serper (Google Results)
-- 🛍️ **Product specs, prices, shopping**
+- 🛍 **Product specs, prices, shopping**
 - 📍 **Local businesses, places**
 - 🎯 **"Google it" - explicit Google results**
 - 📰 **Shopping/images needed**
@@ -377,7 +377,7 @@ The `config.json` file lets you customize auto-routing and provider defaults:
 | 🛒 **Shopping** | Product prices, reviews, shopping results |
 | 📍 **Local** | Business listings, maps, places |
 | 📰 **News** | Real-time news with Google News integration |
-| 🖼️ **Images** | Google Images search |
+| 🖼 **Images** | Google Images search |
 | ⚡ **Speed** | Fastest response times (~200-400ms) |
 
 #### Best Use Cases
@@ -472,7 +472,7 @@ The `config.json` file lets you customize auto-routing and provider defaults:
 | 🌐 **Multi-Engine** | Aggregates Google, Bing, DuckDuckGo, and 70+ more |
 | 💰 **Free** | $0 API cost (self-hosted, unlimited queries) |
 | 🎯 **Diverse Results** | Get perspectives from multiple search engines |
-| ⚙️ **Customizable** | Choose which engines to use, SafeSearch, language |
+| ⚙ **Customizable** | Choose which engines to use, SafeSearch, language |
 | 🏠 **Self-Hosted** | Full control over your search infrastructure |
 
 #### Best Use Cases

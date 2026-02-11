@@ -120,7 +120,7 @@ python3 scripts/search.py -p searxng -q "linux distros" --engines "google,bing"
 
 ---
 
-## ⚙️ Configuration
+## ⚙ Configuration
 
 ```json
 {
@@ -211,7 +211,7 @@ If one provider fails (rate limit, timeout, error), the skill automatically trie
 
 ---
 
-## ⚠️ Important Note
+## ⚠ Important Note
 
 **Tavily, Serper, and Exa are NOT core OpenClaw providers.**
 
