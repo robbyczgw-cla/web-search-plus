@@ -38,7 +38,7 @@ from urllib.parse import quote
 # Result Caching
 # =============================================================================
 
-CACHE_DIR = Path("/root/clawd/memory/search-cache")
+CACHE_DIR = Path(os.environ.get("WSP_CACHE_DIR", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".cache")))
 DEFAULT_CACHE_TTL = 3600  # 1 hour in seconds
 
 
