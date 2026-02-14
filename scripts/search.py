@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 
 # =============================================================================
@@ -39,12 +39,26 @@ from urllib.parse import quote
 # =============================================================================
 
 CACHE_DIR = Path(os.environ.get("WSP_CACHE_DIR", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".cache")))
+PROVIDER_HEALTH_FILE = CACHE_DIR / "provider_health.json"
 DEFAULT_CACHE_TTL = 3600  # 1 hour in seconds
 
 
-def _get_cache_key(query: str, provider: str, max_results: int) -> str:
-    """Generate a unique cache key from query parameters."""
-    key_string = f"{query}|{provider}|{max_results}"
+def _build_cache_payload(query: str, provider: str, max_results: int, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Build normalized payload used for cache key hashing."""
+    payload = {
+        "query": query,
+        "provider": provider,
+        "max_results": max_results,
+    }
+    if params:
+        payload.update(params)
+    return payload
+
+
+def _get_cache_key(query: str, provider: str, max_results: int, params: Optional[Dict[str, Any]] = None) -> str:
+    """Generate a unique cache key from all relevant query parameters."""
+    payload = _build_cache_payload(query, provider, max_results, params)
+    key_string = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(key_string.encode("utf-8")).hexdigest()[:32]
 
 
@@ -58,7 +72,7 @@ def _ensure_cache_dir() -> None:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def cache_get(query: str, provider: str, max_results: int, ttl: int = DEFAULT_CACHE_TTL) -> Optional[Dict[str, Any]]:
+def cache_get(query: str, provider: str, max_results: int, ttl: int = DEFAULT_CACHE_TTL, params: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
     """
     Retrieve cached search results if they exist and are not expired.
     
@@ -71,7 +85,7 @@ def cache_get(query: str, provider: str, max_results: int, ttl: int = DEFAULT_CA
     Returns:
         Cached result dict or None if not found/expired
     """
-    cache_key = _get_cache_key(query, provider, max_results)
+    cache_key = _get_cache_key(query, provider, max_results, params)
     cache_path = _get_cache_path(cache_key)
     
     if not cache_path.exists():
@@ -94,7 +108,7 @@ def cache_get(query: str, provider: str, max_results: int, ttl: int = DEFAULT_CA
         return None
 
 
-def cache_put(query: str, provider: str, max_results: int, result: Dict[str, Any]) -> None:
+def cache_put(query: str, provider: str, max_results: int, result: Dict[str, Any], params: Optional[Dict[str, Any]] = None) -> None:
     """
     Store search results in cache.
     
@@ -106,7 +120,7 @@ def cache_put(query: str, provider: str, max_results: int, result: Dict[str, Any
     """
     _ensure_cache_dir()
     
-    cache_key = _get_cache_key(query, provider, max_results)
+    cache_key = _get_cache_key(query, provider, max_results, params)
     cache_path = _get_cache_path(cache_key)
     
     # Add cache metadata
@@ -116,6 +130,7 @@ def cache_put(query: str, provider: str, max_results: int, result: Dict[str, Any
     cached_result["_cache_query"] = query
     cached_result["_cache_provider"] = provider
     cached_result["_cache_max_results"] = max_results
+    cached_result["_cache_params"] = params or {}
     
     try:
         with open(cache_path, "w", encoding="utf-8") as f:
@@ -139,6 +154,8 @@ def cache_clear() -> Dict[str, Any]:
     size_freed = 0
     
     for cache_file in CACHE_DIR.glob("*.json"):
+        if cache_file.name == PROVIDER_HEALTH_FILE.name:
+            continue
         try:
             size_freed += cache_file.stat().st_size
             cache_file.unlink()
@@ -172,7 +189,7 @@ def cache_stats() -> Dict[str, Any]:
             "exists": False
         }
     
-    entries = list(CACHE_DIR.glob("*.json"))
+    entries = [p for p in CACHE_DIR.glob("*.json") if p.name != PROVIDER_HEALTH_FILE.name]
     total_size = 0
     oldest_time = None
     newest_time = None
@@ -1154,6 +1171,105 @@ def explain_routing(query: str, config: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+
+
+class ProviderRequestError(Exception):
+    """Structured provider error with retry/cooldown metadata."""
+
+    def __init__(self, message: str, status_code: Optional[int] = None, transient: bool = False):
+        super().__init__(message)
+        self.status_code = status_code
+        self.transient = transient
+
+
+TRANSIENT_HTTP_CODES = {429, 503}
+COOLDOWN_STEPS_SECONDS = [60, 300, 1500, 3600]  # 1m -> 5m -> 25m -> 1h cap
+RETRY_BACKOFF_SECONDS = [1, 3, 9]
+
+
+def _ensure_parent(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _load_provider_health() -> Dict[str, Any]:
+    if not PROVIDER_HEALTH_FILE.exists():
+        return {}
+    try:
+        with open(PROVIDER_HEALTH_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, dict) else {}
+    except (json.JSONDecodeError, IOError):
+        return {}
+
+
+def _save_provider_health(state: Dict[str, Any]) -> None:
+    _ensure_parent(PROVIDER_HEALTH_FILE)
+    with open(PROVIDER_HEALTH_FILE, "w", encoding="utf-8") as f:
+        json.dump(state, f, ensure_ascii=False, indent=2)
+
+
+def provider_in_cooldown(provider: str) -> Tuple[bool, int]:
+    state = _load_provider_health()
+    pstate = state.get(provider, {})
+    cooldown_until = int(pstate.get("cooldown_until", 0) or 0)
+    remaining = cooldown_until - int(time.time())
+    return (remaining > 0, max(0, remaining))
+
+
+def mark_provider_failure(provider: str, error_message: str) -> Dict[str, Any]:
+    state = _load_provider_health()
+    now = int(time.time())
+    pstate = state.get(provider, {})
+    fail_count = int(pstate.get("failure_count", 0)) + 1
+    cooldown_seconds = COOLDOWN_STEPS_SECONDS[min(fail_count - 1, len(COOLDOWN_STEPS_SECONDS) - 1)]
+    state[provider] = {
+        "failure_count": fail_count,
+        "cooldown_until": now + cooldown_seconds,
+        "cooldown_seconds": cooldown_seconds,
+        "last_error": error_message,
+        "last_failure_at": now,
+    }
+    _save_provider_health(state)
+    return state[provider]
+
+
+def reset_provider_health(provider: str) -> None:
+    state = _load_provider_health()
+    if provider in state:
+        state.pop(provider, None)
+        _save_provider_health(state)
+
+
+def normalize_result_url(url: str) -> str:
+    if not url:
+        return ""
+    parsed = urlparse(url.strip())
+    netloc = (parsed.netloc or "").lower()
+    if netloc.startswith("www."):
+        netloc = netloc[4:]
+    path = parsed.path.rstrip("/")
+    return f"{netloc}{path}"
+
+
+def deduplicate_results_across_providers(results_by_provider: List[Tuple[str, Dict[str, Any]]], max_results: int) -> Tuple[List[Dict[str, Any]], int]:
+    deduped = []
+    seen = set()
+    dedup_count = 0
+    for provider_name, data in results_by_provider:
+        for item in data.get("results", []):
+            norm = normalize_result_url(item.get("url", ""))
+            if norm and norm in seen:
+                dedup_count += 1
+                continue
+            if norm:
+                seen.add(norm)
+            item = item.copy()
+            item.setdefault("provider", provider_name)
+            deduped.append(item)
+            if len(deduped) >= max_results:
+                return deduped, dedup_count
+    return deduped, dedup_count
+
 # =============================================================================
 # HTTP Client
 # =============================================================================
@@ -1186,11 +1302,13 @@ def make_request(url: str, headers: dict, body: dict, timeout: int = 30) -> dict
         }
         
         friendly_msg = error_messages.get(e.code, f"API error: {error_detail}")
-        raise Exception(f"{friendly_msg} (HTTP {e.code})")
+        raise ProviderRequestError(f"{friendly_msg} (HTTP {e.code})", status_code=e.code, transient=e.code in TRANSIENT_HTTP_CODES)
     except URLError as e:
-        raise Exception(f"Network error: {e.reason}. Check your internet connection.")
+        reason = str(getattr(e, "reason", e))
+        is_timeout = "timed out" in reason.lower()
+        raise ProviderRequestError(f"Network error: {reason}. Check your internet connection.", transient=is_timeout)
     except TimeoutError:
-        raise Exception(f"Request timed out after {timeout}s. Try again or reduce max_results.")
+        raise ProviderRequestError(f"Request timed out after {timeout}s. Try again or reduce max_results.", transient=True)
 
 
 # =============================================================================
@@ -1506,7 +1624,13 @@ def search_you(
             503: "You.com service unavailable."
         }
         friendly_msg = error_messages.get(e.code, f"API error: {error_detail}")
-        raise Exception(f"{friendly_msg} (HTTP {e.code})")
+        raise ProviderRequestError(f"{friendly_msg} (HTTP {e.code})", status_code=e.code, transient=e.code in TRANSIENT_HTTP_CODES)
+    except URLError as e:
+        reason = str(getattr(e, "reason", e))
+        is_timeout = "timed out" in reason.lower()
+        raise ProviderRequestError(f"Network error: {reason}. Check your internet connection.", transient=is_timeout)
+    except TimeoutError:
+        raise ProviderRequestError("You.com request timed out after 30s.", transient=True)
     
     # Parse results
     results_data = data.get("results", {})
@@ -1663,11 +1787,13 @@ def search_searxng(
             503: "SearXNG service unavailable."
         }
         friendly_msg = error_messages.get(e.code, f"SearXNG error: {error_detail}")
-        raise Exception(f"{friendly_msg} (HTTP {e.code})")
+        raise ProviderRequestError(f"{friendly_msg} (HTTP {e.code})", status_code=e.code, transient=e.code in TRANSIENT_HTTP_CODES)
     except URLError as e:
-        raise Exception(f"Cannot reach SearXNG instance at {instance_url}. Error: {e.reason}")
+        reason = str(getattr(e, "reason", e))
+        is_timeout = "timed out" in reason.lower()
+        raise ProviderRequestError(f"Cannot reach SearXNG instance at {instance_url}. Error: {reason}", transient=is_timeout)
     except TimeoutError:
-        raise Exception(f"SearXNG request timed out after 30s. Check instance health.")
+        raise ProviderRequestError(f"SearXNG request timed out after 30s. Check instance health.", transient=True)
     
     # Parse results
     raw_results = data.get("results", [])
@@ -1968,13 +2094,26 @@ Full docs: See README.md and SKILL.md
     auto_config = config.get("auto_routing", {})
     provider_priority = auto_config.get("provider_priority", ["serper", "tavily", "exa"])
     disabled_providers = auto_config.get("disabled_providers", [])
-    
+
     # Start with the selected provider, then try others in priority order
     providers_to_try = [provider]
     for p in provider_priority:
         if p not in providers_to_try and p not in disabled_providers:
             providers_to_try.append(p)
-    
+
+    # Skip providers currently in cooldown
+    eligible_providers = []
+    cooldown_skips = []
+    for p in providers_to_try:
+        in_cd, remaining = provider_in_cooldown(p)
+        if in_cd:
+            cooldown_skips.append({"provider": p, "cooldown_remaining_seconds": remaining})
+        else:
+            eligible_providers.append(p)
+
+    if not eligible_providers:
+        eligible_providers = providers_to_try[:1]
+
     # Helper function to execute search for a provider
     def execute_search(prov: str) -> Dict[str, Any]:
         key = validate_api_key(prov, config)
@@ -2041,7 +2180,40 @@ Full docs: See README.md and SKILL.md
             )
         else:
             raise ValueError(f"Unknown provider: {prov}")
-    
+
+    def execute_with_retry(prov: str) -> Dict[str, Any]:
+        last_error = None
+        for attempt in range(0, 3):
+            try:
+                return execute_search(prov)
+            except ProviderRequestError as e:
+                last_error = e
+                if e.status_code in {401, 403}:
+                    break
+                if not e.transient:
+                    break
+                if attempt < 2:
+                    time.sleep(RETRY_BACKOFF_SECONDS[attempt])
+                    continue
+                break
+            except Exception as e:
+                last_error = e
+                break
+        raise last_error if last_error else Exception("Unknown provider execution error")
+
+    cache_context = {
+        "locale": f"{args.country}:{args.language}",
+        "freshness": args.freshness,
+        "time_range": args.time_range,
+        "topic": args.topic,
+        "search_engines": sorted(args.engines) if args.engines else None,
+        "include_news": bool(args.include_news),
+        "search_type": args.search_type,
+        "exa_type": args.exa_type,
+        "category": args.category,
+        "similar_url": args.similar_url,
+    }
+
     # Check cache first (unless --no-cache is set)
     cached_result = None
     cache_hit = False
@@ -2050,80 +2222,106 @@ Full docs: See README.md and SKILL.md
             query=args.query,
             provider=provider,
             max_results=args.max_results,
-            ttl=args.cache_ttl
+            ttl=args.cache_ttl,
+            params=cache_context,
         )
         if cached_result:
             cache_hit = True
-            # Remove cache metadata from output but note it was cached
             result = {k: v for k, v in cached_result.items() if not k.startswith("_cache_")}
             result["cached"] = True
             result["cache_age_seconds"] = int(time.time() - cached_result.get("_cache_timestamp", 0))
-    
-    # Try providers with fallback on error (if not cached)
+
     errors = []
     successful_provider = None
-    
-    if not cache_hit:
-        result = None
-    
-    for current_provider in providers_to_try:
+    successful_results: List[Tuple[str, Dict[str, Any]]] = []
+    result = None if not cache_hit else result
+
+    for idx, current_provider in enumerate(eligible_providers):
         if cache_hit:
             successful_provider = provider
-            break  # Already have cached result
+            break
         try:
-            result = execute_search(current_provider)
+            provider_result = execute_with_retry(current_provider)
+            reset_provider_health(current_provider)
+            successful_results.append((current_provider, provider_result))
             successful_provider = current_provider
-            break  # Success! Exit the loop
+
+            # If we have enough results, stop.
+            if len(provider_result.get("results", [])) >= args.max_results:
+                break
+
+            # Only continue collecting from lower-priority providers when fallback was needed.
+            if not errors:
+                break
         except Exception as e:
             error_msg = str(e)
-            errors.append({"provider": current_provider, "error": error_msg})
-            # Log fallback attempt to stderr
-            if len(providers_to_try) > 1:
-                remaining = [p for p in providers_to_try if p != current_provider and p not in [err["provider"] for err in errors]]
+            cooldown_info = mark_provider_failure(current_provider, error_msg)
+            errors.append({
+                "provider": current_provider,
+                "error": error_msg,
+                "cooldown_seconds": cooldown_info.get("cooldown_seconds"),
+            })
+            if len(eligible_providers) > 1:
+                remaining = eligible_providers[idx + 1:]
                 if remaining:
                     print(json.dumps({
                         "fallback": True,
                         "failed_provider": current_provider,
                         "error": error_msg,
-                        "trying_next": remaining[0] if remaining else None
+                        "trying_next": remaining[0],
                     }), file=sys.stderr)
-            continue  # Try next provider
-    
+            continue
+
+    if successful_results:
+        if len(successful_results) == 1:
+            result = successful_results[0][1]
+        else:
+            primary = successful_results[0][1].copy()
+            deduped_results, dedup_count = deduplicate_results_across_providers(successful_results, args.max_results)
+            primary["results"] = deduped_results
+            primary["deduplicated"] = dedup_count > 0
+            primary.setdefault("metadata", {})
+            primary["metadata"]["dedup_count"] = dedup_count
+            primary["metadata"]["providers_merged"] = [p for p, _ in successful_results]
+            result = primary
+
     if result is not None:
-        # Update routing info if we fell back to a different provider
         if successful_provider != provider:
             routing_info["fallback_used"] = True
             routing_info["original_provider"] = provider
             routing_info["provider"] = successful_provider
-            routing_info["fallback_errors"] = errors[:-1] if errors else []
-        
+            routing_info["fallback_errors"] = errors
+
+        if cooldown_skips:
+            routing_info["cooldown_skips"] = cooldown_skips
+
         result["routing"] = routing_info
-        
-        # Cache the result if it wasn't a cache hit (and caching is enabled)
+
         if not cache_hit and not args.no_cache and args.query:
             cache_put(
                 query=args.query,
                 provider=successful_provider or provider,
                 max_results=args.max_results,
-                result=result
+                result=result,
+                params=cache_context,
             )
-        
-        # Add cache indicator to output
-        if cache_hit:
-            result["cached"] = True
-        else:
-            result["cached"] = False
-        
+
+        result["cached"] = bool(cache_hit)
+        if "deduplicated" not in result:
+            result["deduplicated"] = False
+            result.setdefault("metadata", {})
+            result["metadata"].setdefault("dedup_count", 0)
+
         indent = None if args.compact else 2
         print(json.dumps(result, indent=indent, ensure_ascii=False))
     else:
-        # All providers failed
         error_result = {
             "error": "All providers failed",
             "provider": provider,
             "query": args.query,
             "routing": routing_info,
             "provider_errors": errors,
+            "cooldown_skips": cooldown_skips,
         }
         print(json.dumps(error_result, indent=2), file=sys.stderr)
         sys.exit(1)

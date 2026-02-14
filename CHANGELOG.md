@@ -1,5 +1,22 @@
 # Changelog - Web Search Plus
 
+## [2.7.0] - 2026-02-14
+
+### ✨ Added
+- Provider cooldown tracking in `.cache/provider_health.json`
+- Exponential cooldown on provider failures: **1m → 5m → 25m → 1h (cap)**
+- Retry strategy for transient failures (timeout, 429, 503): up to 2 retries with backoff **1s → 3s → 9s**
+- Smarter cache keys hashed from full request context (query/provider/max_results + locale, freshness, time_range, topic, search_engines, include_news, and related params)
+- Cross-provider result deduplication by normalized URL during fallback merge
+
+### 🔧 Changed
+- Cooldown providers are skipped in routing while their cooldown is active
+- Provider health is reset automatically after successful requests
+- Fallback output now includes dedup metadata:
+  - `deduplicated: true|false`
+  - `metadata.dedup_count`
+
+
 ## [2.6.5] - 2026-02-11
 
 ### 🆕 File-Based Result Caching

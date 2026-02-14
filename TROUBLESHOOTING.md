@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-## Caching Issues (v2.6.5+)
+## Caching Issues (v2.7.0+)
 
 ### Cache not working / always fetching fresh
 

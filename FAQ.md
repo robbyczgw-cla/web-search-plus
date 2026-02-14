@@ -1,6 +1,6 @@
 # Frequently Asked Questions
 
-## Caching (NEW in v2.6.5!)
+## Caching (NEW in v2.7.0!)
 
 ### How does caching work?
 Search results are automatically cached locally for 1 hour (3600 seconds). When you make the same query again, you get instant results at $0 API cost. The cache key is based on: query text + provider + max_results.
