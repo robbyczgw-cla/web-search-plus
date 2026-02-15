@@ -356,11 +356,61 @@ def get_api_key(provider: str, config: Dict[str, Any] = None) -> Optional[str]:
     return os.environ.get(key_map.get(provider, ""))
 
 
+def _validate_searxng_url(url: str) -> str:
+    """Validate and sanitize SearXNG instance URL to prevent SSRF.
+    
+    Enforces http/https scheme and blocks requests to private/internal networks
+    including cloud metadata endpoints, loopback, link-local, and RFC1918 ranges.
+    """
+    import ipaddress
+    import socket
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"SearXNG URL must use http or https scheme, got: {parsed.scheme}")
+    if not parsed.hostname:
+        raise ValueError("SearXNG URL must include a hostname")
+
+    hostname = parsed.hostname
+
+    # Block cloud metadata endpoints by hostname
+    BLOCKED_HOSTS = {
+        "169.254.169.254",        # AWS/GCP/Azure metadata
+        "metadata.google.internal",
+        "metadata.internal",
+    }
+    if hostname in BLOCKED_HOSTS:
+        raise ValueError(f"SearXNG URL blocked: {hostname} is a cloud metadata endpoint")
+
+    # Resolve hostname and check for private/internal IPs
+    # Operators who intentionally self-host on private networks can opt out
+    allow_private = os.environ.get("SEARXNG_ALLOW_PRIVATE", "").strip() == "1"
+    if not allow_private:
+        try:
+            resolved_ips = socket.getaddrinfo(hostname, parsed.port or 80, proto=socket.IPPROTO_TCP)
+            for family, _type, _proto, _canonname, sockaddr in resolved_ips:
+                ip = ipaddress.ip_address(sockaddr[0])
+                if ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_reserved:
+                    raise ValueError(
+                        f"SearXNG URL blocked: {hostname} resolves to private/internal IP {ip}. "
+                        f"If this is intentional, set SEARXNG_ALLOW_PRIVATE=1 in your environment."
+                    )
+        except socket.gaierror:
+            raise ValueError(f"SearXNG URL blocked: cannot resolve hostname {hostname}")
+
+    return url
+
+
 def get_searxng_instance_url(config: Dict[str, Any] = None) -> Optional[str]:
     """Get SearXNG instance URL from config or environment.
     
     SearXNG is self-hosted, so no API key needed - just the instance URL.
     Priority: config.json > SEARXNG_INSTANCE_URL environment variable
+    
+    Security: URL is validated to prevent SSRF via scheme enforcement.
+    Both config sources (config.json, env var) are operator-controlled,
+    not agent-controlled, so private IPs like localhost are permitted.
     """
     # Check config.json first
     if config:
@@ -368,10 +418,13 @@ def get_searxng_instance_url(config: Dict[str, Any] = None) -> Optional[str]:
         if isinstance(searxng_config, dict):
             url = searxng_config.get("instance_url")
             if url:
-                return url
+                return _validate_searxng_url(url)
     
     # Then check environment
-    return os.environ.get("SEARXNG_INSTANCE_URL")
+    env_url = os.environ.get("SEARXNG_INSTANCE_URL")
+    if env_url:
+        return _validate_searxng_url(env_url)
+    return None
 
 
 # Backward compatibility alias
@@ -1756,7 +1809,8 @@ def search_searxng(
     if time_range:
         params["time_range"] = time_range
     
-    # Build URL
+    # Build URL — instance_url comes from operator-controlled config/env only
+    # (validated by _validate_searxng_url), not from agent/LLM input
     base_url = instance_url.rstrip("/")
     query_string = "&".join(f"{k}={quote(str(v))}" for k, v in params.items())
     url = f"{base_url}/search?{query_string}"
@@ -2168,6 +2222,8 @@ Full docs: See README.md and SKILL.md
         elif prov == "searxng":
             # For SearXNG, 'key' is actually the instance URL
             instance_url = args.searxng_url or key
+            if instance_url:
+                instance_url = _validate_searxng_url(instance_url)
             return search_searxng(
                 query=args.query,
                 instance_url=instance_url,

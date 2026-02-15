@@ -1,6 +1,6 @@
 ---
 name: web-search-plus
-version: 2.7.0
+version: 2.7.2
 description: Unified search skill with Intelligent Auto-Routing. Uses multi-signal analysis to automatically select between Serper (Google), Tavily (Research), Exa (Neural), You.com (RAG/Real-time), and SearXNG (Privacy/Self-hosted) with confidence scoring.
 tags: [search, web-search, serper, tavily, exa, you, searxng, google, research, semantic-search, auto-routing, multi-provider, shopping, rag, free-tier, privacy, self-hosted]
 metadata: {"openclaw":{"requires":{"bins":["python3","bash"],"env":{"SERPER_API_KEY":"optional","TAVILY_API_KEY":"optional","EXA_API_KEY":"optional","YOU_API_KEY":"optional","SEARXNG_INSTANCE_URL":"optional"},"note":"Only ONE provider key needed. All are optional."}}}
@@ -219,6 +219,14 @@ If one provider fails (rate limit, timeout, error), the skill automatically trie
 ✅ Use this skill's scripts — keys auto-load from `.env`
 
 ---
+
+## 🔒 Security
+
+**SearXNG SSRF Protection:** The SearXNG instance URL is validated with defense-in-depth:
+- Enforces `http`/`https` schemes only
+- Blocks cloud metadata endpoints (169.254.169.254, metadata.google.internal)
+- Resolves hostnames and blocks private/internal IPs (loopback, RFC1918, link-local, reserved)
+- Operators who intentionally self-host on private networks can set `SEARXNG_ALLOW_PRIVATE=1`
 
 ## 📚 More Documentation
 
