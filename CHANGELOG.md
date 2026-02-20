@@ -1,5 +1,14 @@
 # Changelog - Web Search Plus
 
+## [2.8.5] - 2026-02-20
+
+### ✨ Feature: Perplexity freshness filter
+
+- Added `freshness` parameter to Perplexity provider (`day`, `week`, `month`, `year`)
+- Maps to Perplexity's native `search_recency_filter` parameter
+- Example: `python3 scripts/search.py -p perplexity -q "latest AI news" --freshness day`
+- Consistent with freshness support in Serper and Brave providers
+
 ## [2.8.4] - 2026-02-20
 
 ### 🔒 Security Fix: SSRF protection in setup wizard
