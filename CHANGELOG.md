@@ -1,5 +1,14 @@
 # Changelog - Web Search Plus
 
+## [2.8.3] - 2026-02-20
+
+### 🐛 Critical Fix: Perplexity results empty
+
+- **Fixed:** Perplexity provider returned 0 results because the AI-synthesized answer wasn't mapped into the results array
+- **Before:** Only extracted URLs from the answer text were returned as results (often 0)
+- **After:** The full answer is now the primary result (title, snippet with cleaned text), extracted source URLs follow as additional results
+- **Impact:** Perplexity queries now always return at least 1 result with the synthesized answer
+
 ## [2.8.0] - 2026-02-20
 
 ### 🆕 New Provider: Perplexity (AI-Synthesized Answers)
