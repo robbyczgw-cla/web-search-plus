@@ -1,5 +1,18 @@
 # Changelog - Web Search Plus
 
+## [2.8.0] - 2026-02-20
+
+### ✨ Added
+- **Perplexity provider** via Kilo Gateway (perplexity/sonar-pro) — AI-synthesized answers with citations
+- Direct-answer signal class for local info, events, "what is" queries
+- `--explain-routing` flag for debugging provider selection
+
+### 🔧 Fixed
+- Routing rebalanced — Serper no longer dominates by default
+- Research queries (compare, status, explain) now properly route to Tavily
+- Discovery queries (find examples, events in, startups similar to) route to Exa
+- Provider priority order updated: Tavily → Exa → Perplexity → Serper
+
 ## [2.7.0] - 2026-02-14
 
 ### ✨ Added
