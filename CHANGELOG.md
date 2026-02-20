@@ -1,5 +1,14 @@
 # Changelog - Web Search Plus
 
+## [2.8.4] - 2026-02-20
+
+### 🔒 Security Fix: SSRF protection in setup wizard
+
+- **Fixed:** `setup.py` SearXNG connection test had no SSRF protection (unlike `search.py`)
+- **Before:** Operator could be tricked into probing internal networks during setup
+- **After:** Same IP validation as `search.py` — blocks private IPs, cloud metadata, loopback
+- **Credit:** ClawHub security scanner
+
 ## [2.8.3] - 2026-02-20
 
 ### 🐛 Critical Fix: Perplexity results empty

@@ -180,6 +180,33 @@ def ask_searxng_instance(docs_url: str) -> str:
             print(color("    ⚠️  URL must start with http:// or https://", Colors.YELLOW))
             continue
         
+        # SSRF protection: validate URL before connecting
+        try:
+            import ipaddress
+            import socket
+            from urllib.parse import urlparse as _urlparse
+            _parsed = _urlparse(url)
+            _hostname = _parsed.hostname or ""
+            _blocked = {"169.254.169.254", "metadata.google.internal", "metadata.internal"}
+            if _hostname in _blocked:
+                print(color(f"    ❌ Blocked: {_hostname} is a cloud metadata endpoint.", Colors.RED))
+                continue
+            if not os.environ.get("SEARXNG_ALLOW_PRIVATE", "").strip() == "1":
+                _resolved = socket.getaddrinfo(_hostname, _parsed.port or 80, proto=socket.IPPROTO_TCP)
+                for _fam, _t, _p, _cn, _sa in _resolved:
+                    _ip = ipaddress.ip_address(_sa[0])
+                    if _ip.is_loopback or _ip.is_private or _ip.is_link_local or _ip.is_reserved:
+                        print(color(f"    ❌ Blocked: {_hostname} resolves to private IP {_ip}.", Colors.RED))
+                        print(color(f"       Set SEARXNG_ALLOW_PRIVATE=1 if intentional.", Colors.DIM))
+                        raise ValueError("private_ip")
+        except ValueError as _ve:
+            if str(_ve) == "private_ip":
+                continue
+            raise
+        except socket.gaierror:
+            print(color(f"    ❌ Cannot resolve hostname: {_hostname}", Colors.RED))
+            continue
+
         # Test connection
         print(color(f"    Testing connection to {url}...", Colors.DIM))
         try:
