@@ -1,14 +1,14 @@
 # Web Search Plus
 
-> Unified multi-provider web search with **Intelligent Auto-Routing** — uses multi-signal analysis to automatically select between **Serper**, **Tavily**, **Exa**, **You.com**, and **SearXNG** with confidence scoring.
+> Unified multi-provider web search with **Intelligent Auto-Routing** — uses multi-signal analysis to automatically select between **Serper**, **Tavily**, **Exa**, **Perplexity (Sonar Pro)**, **You.com**, and **SearXNG** with confidence scoring.
 
 [![ClawHub](https://img.shields.io/badge/ClawHub-web--search--plus-blue)](https://clawhub.ai)
-[![Version](https://img.shields.io/badge/version-2.7.0-green)](https://clawhub.ai)
+[![Version](https://img.shields.io/badge/version-2.8.5-green)](https://clawhub.ai)
 [![GitHub](https://img.shields.io/badge/GitHub-web--search--plus-blue)](https://github.com/robbyczgw-cla/web-search-plus)
 
 ---
 
-## 🧠 Features (v2.7.0)
+## 🧠 Features (v2.8.5)
 
 **Intelligent Multi-Signal Routing** — The skill uses sophisticated query analysis:
 
@@ -58,6 +58,12 @@ python3 scripts/search.py -q "search privately without tracking" # → SearXNG (
 - 💻 **GitHub projects**
 - 📅 **Date-specific content**
 
+### Perplexity (Sonar Pro via Kilo Gateway)
+- ⚡ **Direct answers** (great for “who/what/define”)
+- 🧾 **Cited, answer-first output**
+- 🕒 **Current events / “as of” questions**
+- 🔑 Auth via `KILOCODE_API_KEY` (routes to `https://api.kilo.ai`)
+
 ### You.com (RAG/Real-time)
 - 🤖 **RAG applications** (LLM-ready snippets)
 - 📰 **Combined web + news** (single API call)
@@ -106,6 +112,7 @@ The wizard explains each provider, collects your API keys, and creates `config.j
 export SERPER_API_KEY="your-key"   # https://serper.dev
 export TAVILY_API_KEY="your-key"   # https://tavily.com
 export EXA_API_KEY="your-key"      # https://exa.ai
+export KILOCODE_API_KEY="your-key" # enables Perplexity Sonar Pro via https://api.kilo.ai
 export YOU_API_KEY="your-key"      # https://api.you.com
 export SEARXNG_INSTANCE_URL="https://your-instance.example.com"  # Self-hosted
 
@@ -123,6 +130,7 @@ python3 scripts/search.py -q "best laptop 2024"
 python3 scripts/search.py -p serper -q "iPhone 16 specs"
 python3 scripts/search.py -p tavily -q "quantum computing explained" --depth advanced
 python3 scripts/search.py -p exa -q "AI startups 2024" --category company
+python3 scripts/search.py -p perplexity -q "Who is the president of Austria?"
 ```
 
 ---
@@ -160,7 +168,7 @@ python3 scripts/search.py -q "alternatives to Figma"          # → Exa
 python3 scripts/search.py -q "search privately without tracking" # → SearXNG
 ```
 
-### Result Caching (NEW in v2.7.0!)
+### Result Caching (introduced in v2.7.x)
 
 Search results are **automatically cached** for 1 hour to save API costs:
 
