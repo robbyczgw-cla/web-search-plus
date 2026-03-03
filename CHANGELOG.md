@@ -1,5 +1,11 @@
 # Changelog - Web Search Plus
 
+## [2.8.6] - 2026-03-03
+
+### Changed
+- Documented Perplexity Sonar Pro usage and refreshed release docs.
+
+
 ## [2.8.5] - 2026-02-20
 
 ### ✨ Feature: Perplexity freshness filter
