@@ -1,16 +1,16 @@
 ---
 name: web-search-plus
-version: 2.8.6
-description: Unified search skill with Intelligent Auto-Routing. Uses multi-signal analysis to automatically select between Serper (Google), Tavily (Research), Exa (Neural), Perplexity (AI Answers), You.com (RAG/Real-time), and SearXNG (Privacy/Self-hosted) with confidence scoring.
-tags: [search, web-search, serper, tavily, exa, perplexity, you, searxng, google, research, semantic-search, auto-routing, multi-provider, shopping, rag, free-tier, privacy, self-hosted, kilo]
-metadata: {"openclaw":{"requires":{"bins":["python3","bash"],"env":{"SERPER_API_KEY":"optional","TAVILY_API_KEY":"optional","EXA_API_KEY":"optional","YOU_API_KEY":"optional","SEARXNG_INSTANCE_URL":"optional","KILOCODE_API_KEY":"optional — required for Perplexity provider (via Kilo Gateway)"},"note":"Only ONE provider key needed. All are optional."}}}
+version: 2.9.0
+description: Unified search skill with Intelligent Auto-Routing. Uses multi-signal analysis to automatically select between Serper (Google), Tavily (Research), Querit (Multilingual AI Search), Exa (Neural), Perplexity (AI Answers), You.com (RAG/Real-time), and SearXNG (Privacy/Self-hosted) with confidence scoring.
+tags: [search, web-search, serper, tavily, querit, exa, perplexity, you, searxng, google, multilingual-search, research, semantic-search, auto-routing, multi-provider, shopping, rag, free-tier, privacy, self-hosted, kilo]
+metadata: {"openclaw":{"requires":{"bins":["python3","bash"],"env":{"SERPER_API_KEY":"optional","TAVILY_API_KEY":"optional","QUERIT_API_KEY":"optional","EXA_API_KEY":"optional","YOU_API_KEY":"optional","SEARXNG_INSTANCE_URL":"optional","KILOCODE_API_KEY":"optional — required for Perplexity provider (via Kilo Gateway)"},"note":"Only ONE provider key needed. All are optional."}}}
 ---
 
 # Web Search Plus
 
 **Stop choosing search providers. Let the skill do it for you.**
 
-This skill connects you to 6 search providers (Serper, Tavily, Exa, Perplexity, You.com, SearXNG) and automatically picks the best one for each query. Shopping question? → Google results. Research question? → Deep research engine. Need a direct answer? → AI-synthesized with citations. Want privacy? → Self-hosted option.
+This skill connects you to 7 search providers (Serper, Tavily, Querit, Exa, Perplexity, You.com, SearXNG) and automatically picks the best one for each query. Shopping question? → Google results. Research question? → Deep research engine. Need a direct answer? → AI-synthesized with citations. Want privacy? → Self-hosted option.
 
 ---
 
@@ -18,7 +18,7 @@ This skill connects you to 6 search providers (Serper, Tavily, Exa, Perplexity, 
 
 - **Just search** — No need to think about which provider to use
 - **Smart routing** — Analyzes your query and picks the best provider automatically
-- **6 providers, 1 interface** — Google results, research engines, neural search, AI answers with citations, RAG-optimized, and privacy-first all in one
+- **7 providers, 1 interface** — Google results, research engines, neural search, AI answers with citations, RAG-optimized, and privacy-first all in one
 - **Works with just 1 key** — Start with any single provider, add more later
 - **Free options available** — SearXNG is completely free (self-hosted)
 
@@ -46,6 +46,7 @@ You only need **ONE** key to get started. Add more providers later for better co
 |----------|-----------|----------|---------|
 | **Serper** | 2,500/mo | Shopping, prices, local, news | [serper.dev](https://serper.dev) |
 | **Tavily** | 1,000/mo | Research, explanations, academic | [tavily.com](https://tavily.com) |
+| **Querit** | Contact sales/free tier varies | Multilingual AI search, international updates | [querit.ai](https://querit.ai) |
 | **Exa** | 1,000/mo | "Similar to X", startups, papers | [exa.ai](https://exa.ai) |
 | **Perplexity** | Via Kilo | Direct answers with citations | [kilo.ai](https://kilo.ai) |
 | **You.com** | Limited | Real-time info, AI/RAG context | [api.you.com](https://api.you.com) |
@@ -57,6 +58,7 @@ You only need **ONE** key to get started. Add more providers later for better co
 # Option A: .env file (recommended)
 export SERPER_API_KEY="your-key"
 export TAVILY_API_KEY="your-key"
+export QUERIT_API_KEY="your-key"
 
 # Option B: config.json
 { "serper": { "api_key": "your-key" } }
@@ -72,6 +74,7 @@ export TAVILY_API_KEY="your-key"
 | Find restaurants/stores nearby | **Serper** | "best pizza near me" |
 | Understand how something works | **Tavily** | "how does HTTPS encryption work" |
 | Do deep research | **Tavily** | "climate change research 2024" |
+| Search across languages / international updates | **Querit** | "latest AI policy updates in Germany" |
 | Find companies like X | **Exa** | "startups similar to Notion" |
 | Find research papers | **Exa** | "transformer architecture papers" |
 | Get a direct answer with sources | **Perplexity** | "events in Berlin this weekend" |
@@ -90,6 +93,7 @@ The skill looks at your query and picks the best provider:
 ```bash
 "iPhone 16 price"              → Serper (shopping keywords)
 "how does quantum computing work" → Tavily (research question)
+"latest AI policy updates in Germany" → Querit (multilingual + recency)
 "companies like stripe.com"    → Exa (URL detected, similarity)
 "events in Graz this weekend"  → Perplexity (local + direct answer)
 "latest news on AI"            → You.com (real-time intent)
@@ -109,6 +113,7 @@ The skill looks at your query and picks the best provider:
 ```bash
 python3 scripts/search.py -q "Tesla Model 3 price"
 python3 scripts/search.py -q "explain machine learning"
+python3 scripts/search.py -q "latest AI policy updates in Germany"
 python3 scripts/search.py -q "startups like Figma"
 ```
 
@@ -117,6 +122,7 @@ python3 scripts/search.py -q "startups like Figma"
 ```bash
 python3 scripts/search.py -p serper -q "weather Berlin"
 python3 scripts/search.py -p tavily -q "quantum computing" --depth advanced
+python3 scripts/search.py -p querit -q "latest AI policy updates in Germany"
 python3 scripts/search.py -p exa --similar-url "https://stripe.com" --category company
 python3 scripts/search.py -p you -q "breaking tech news" --include-news
 python3 scripts/search.py -p searxng -q "linux distros" --engines "google,bing"

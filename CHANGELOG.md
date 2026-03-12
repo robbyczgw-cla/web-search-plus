@@ -1,5 +1,24 @@
 # Changelog - Web Search Plus
 
+## [2.9.0] - 2026-03-12
+
+### ✨ New Provider: Querit (Multilingual AI Search)
+
+- Added **Querit** as the 7th search provider via `https://api.querit.ai/v1/search`
+- Ported `search_querit()` implementation from `web-search-plus-plugin` v1.2.3
+- Added Querit API key mapping via `QUERIT_API_KEY` and config support
+- Added Querit to intelligent routing, provider priority, available provider lists, and routing explanations
+- Querit routing score uses: `research * 0.65 + rag * 0.35 + recency * 0.45`
+- Treats Querit's quirky `error_code=200` responses as success
+- Handles `IncompleteRead` as retryable/transient
+
+### 📝 Documentation
+
+- Added Querit to README provider tables, examples, and setup docs
+- Added `querit_api_key` to `config.example.json`
+- Bumped package version to `2.9.0`
+
+
 ## [2.8.6] - 2026-03-03
 
 ### Changed

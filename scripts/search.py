@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Web Search Plus — Unified Multi-Provider Search with Intelligent Auto-Routing
-Supports: Serper (Google), Tavily (Research), Exa (Neural), Perplexity (Direct Answers)
+Supports: Serper (Google), Tavily (Research), Querit (Multilingual AI Search),
+Exa (Neural), Perplexity (Direct Answers)
 
 Smart Routing uses multi-signal analysis:
   - Query intent classification (shopping, research, discovery)
@@ -12,7 +13,7 @@ Smart Routing uses multi-signal analysis:
 
 Usage:
     python3 search.py --query "..."                    # Auto-route based on query
-    python3 search.py --provider [serper|tavily|exa] --query "..." [options]
+    python3 search.py --provider [serper|tavily|querit|exa] --query "..." [options]
 
 Examples:
     python3 search.py -q "iPhone 16 Pro price"              # → Serper (shopping intent)
@@ -21,6 +22,7 @@ Examples:
 """
 
 import argparse
+from http.client import IncompleteRead
 import hashlib
 import json
 import os
@@ -275,7 +277,7 @@ DEFAULT_CONFIG = {
     "auto_routing": {
         "enabled": True,
         "fallback_provider": "serper",
-        "provider_priority": ["tavily", "exa", "perplexity", "serper", "you", "searxng"],
+        "provider_priority": ["tavily", "querit", "exa", "perplexity", "serper", "you", "searxng"],
         "disabled_providers": [],
         "confidence_threshold": 0.3,  # Below this, note low confidence
     },
@@ -288,8 +290,15 @@ DEFAULT_CONFIG = {
         "depth": "basic",
         "topic": "general"
     },
+    "querit": {
+        "base_url": "https://api.querit.ai",
+        "base_path": "/v1/search",
+        "timeout": 10
+    },
     "exa": {
-        "type": "neural"
+        "type": "neural",
+        "depth": "normal",
+        "verbosity": "standard"
     },
     "perplexity": {
         "api_url": "https://api.kilo.ai/api/gateway/chat/completions",
@@ -351,12 +360,14 @@ def get_api_key(provider: str, config: Dict[str, Any] = None) -> Optional[str]:
                 return key
     
     # Then check environment
+    if provider == "perplexity":
+        return os.environ.get("PERPLEXITY_API_KEY") or os.environ.get("KILOCODE_API_KEY")
     key_map = {
         "serper": "SERPER_API_KEY",
         "tavily": "TAVILY_API_KEY",
+        "querit": "QUERIT_API_KEY",
         "exa": "EXA_API_KEY",
         "you": "YOU_API_KEY",
-        "perplexity": "KILOCODE_API_KEY",
     }
     return os.environ.get(key_map.get(provider, ""))
 
@@ -456,24 +467,23 @@ def validate_api_key(provider: str, config: Dict[str, Any] = None) -> str:
                 ],
                 "provider": provider
             }
-            print(json.dumps(error_msg, indent=2), file=sys.stderr)
-            sys.exit(1)
-        
+            raise ProviderConfigError(json.dumps(error_msg))
+
         # Validate URL format
         if not key.startswith(("http://", "https://")):
-            print(json.dumps({
+            raise ProviderConfigError(json.dumps({
                 "error": "SearXNG instance URL must start with http:// or https://",
                 "provided": key,
                 "provider": provider
-            }, indent=2), file=sys.stderr)
-            sys.exit(1)
+            }))
         
         return key
     
     if not key:
         env_var = {
             "serper": "SERPER_API_KEY",
-            "tavily": "TAVILY_API_KEY", 
+            "tavily": "TAVILY_API_KEY",
+            "querit": "QUERIT_API_KEY",
             "exa": "EXA_API_KEY",
             "you": "YOU_API_KEY",
             "perplexity": "KILOCODE_API_KEY"
@@ -482,6 +492,7 @@ def validate_api_key(provider: str, config: Dict[str, Any] = None) -> str:
         urls = {
             "serper": "https://serper.dev",
             "tavily": "https://tavily.com",
+            "querit": "https://querit.ai",
             "exa": "https://exa.ai",
             "you": "https://api.you.com",
             "perplexity": "https://api.kilo.ai"
@@ -497,16 +508,14 @@ def validate_api_key(provider: str, config: Dict[str, Any] = None) -> str:
             ],
             "provider": provider
         }
-        print(json.dumps(error_msg, indent=2), file=sys.stderr)
-        sys.exit(1)
-    
+        raise ProviderConfigError(json.dumps(error_msg))
+
     if len(key) < 10:
-        print(json.dumps({
+        raise ProviderConfigError(json.dumps({
             "error": f"API key for {provider} appears invalid (too short)",
             "provider": provider
-        }, indent=2), file=sys.stderr)
-        sys.exit(1)
-    
+        }))
+
     return key
 
 
@@ -750,6 +759,19 @@ class QueryAnalyzer:
         r'\bheadlines?\b': 3.0,
         r'\b202[4-9]\b': 2.0,  # Current year mentions
         r'\blast (week|month|year)\b': 2.0,
+
+        # German local patterns
+        r'\bin der nähe\b': 4.0,
+        r'\bin meiner nähe\b': 4.0,
+        r'\böffnungszeiten\b': 3.0,
+        r'\badresse von\b': 3.0,
+        r'\bweg(beschreibung)? nach\b': 3.5,
+
+        # German news/recency patterns
+        r'\bheute\b': 2.5,
+        r'\bmorgen\b': 2.0,
+        r'\baktuell\b': 2.5,
+        r'\bnachrichten\b': 3.0,
     }
     
     # RAG/AI signals → You.com
@@ -802,6 +824,11 @@ class QueryAnalyzer:
         r'\bthings to do in\b': 4.0,
         r'\bnear me\b': 3.0,
         r'\bcan you (tell me|summarize|explain)\b': 3.5,
+        # German
+        r'\bwann\b': 3.0,
+        r'\bwer\b': 3.0,
+        r'\bwo\b': 2.5,
+        r'\bwie viele\b': 3.0,
     }
 
     # Privacy/Multi-source signals → SearXNG (self-hosted meta-search)
@@ -848,7 +875,74 @@ class QueryAnalyzer:
         r'\bkostenlos(e)?\s+suche\b': 3.5,
         r'\bkeine api.?kosten\b': 4.0,
     }
-    
+
+    # Exa Deep Search signals → deep multi-source synthesis
+    EXA_DEEP_SIGNALS = {
+        r'\bsynthesi[sz]e\b': 5.0,
+        r'\bdeep research\b': 5.0,
+        r'\bcomprehensive (analysis|report|overview|survey)\b': 4.5,
+        r'\bacross (multiple|many|several) (sources|documents|papers)\b': 4.5,
+        r'\baggregat(e|ing) (information|data|results)\b': 4.0,
+        r'\bcross.?referenc': 4.5,
+        r'\bsec filings?\b': 4.5,
+        r'\bannual reports?\b': 4.0,
+        r'\bearnings (call|report|transcript)\b': 4.5,
+        r'\bfinancial analysis\b': 4.0,
+        r'\bliterature (review|survey)\b': 5.0,
+        r'\bacademic literature\b': 4.5,
+        r'\bstate of the (art|field|industry)\b': 4.0,
+        r'\bcompile (a |the )?(report|findings|results)\b': 4.5,
+        r'\bsummariz(e|ing) (research|papers|studies)\b': 4.0,
+        r'\bmultiple documents?\b': 4.0,
+        r'\bdossier\b': 4.5,
+        r'\bdue diligence\b': 4.5,
+        r'\bstructured (output|data|report)\b': 4.0,
+        r'\bmarket research\b': 4.0,
+        r'\bindustry (report|analysis|overview)\b': 4.0,
+        r'\bresearch (on|about|into)\b': 4.0,
+        r'\bwhitepaper\b': 4.5,
+        r'\btechnical report\b': 4.0,
+        r'\bsurvey of\b': 4.5,
+        r'\bmeta.?analysis\b': 5.0,
+        r'\bsystematic review\b': 5.0,
+        r'\bcase study\b': 3.5,
+        r'\bbenchmark(s|ing)?\b': 3.5,
+        # German
+        r'\btiefenrecherche\b': 5.0,
+        r'\bumfassende (analyse|übersicht|recherche)\b': 4.5,
+        r'\baus mehreren quellen zusammenfassen\b': 4.5,
+        r'\bmarktforschung\b': 4.0,
+    }
+
+    # Exa Deep Reasoning signals → complex cross-reference analysis
+    EXA_DEEP_REASONING_SIGNALS = {
+        r'\bdeep.?reasoning\b': 6.0,
+        r'\bcomplex (analysis|reasoning|research)\b': 4.5,
+        r'\bcontradictions?\b': 4.5,
+        r'\breconcil(e|ing)\b': 5.0,
+        r'\bcritical(ly)? analyz': 4.5,
+        r'\bweigh(ing)? (the )?evidence\b': 4.5,
+        r'\bcompeting (claims|theories|perspectives)\b': 4.5,
+        r'\bcomplex financial\b': 4.5,
+        r'\bregulatory (analysis|compliance|landscape)\b': 4.5,
+        r'\blegal analysis\b': 4.5,
+        r'\bcomprehensive (due diligence|investigation)\b': 5.0,
+        r'\bpatent (landscape|analysis|search)\b': 4.5,
+        r'\bmarket intelligence\b': 4.5,
+        r'\bcompetitive (intelligence|landscape)\b': 4.5,
+        r'\btrade.?offs?\b': 4.0,
+        r'\bpros and cons of\b': 4.0,
+        r'\bshould I (use|choose|pick)\b': 3.5,
+        r'\bwhich is better\b': 4.0,
+        # German
+        r'\bkomplexe analyse\b': 4.5,
+        r'\bwidersprüche\b': 4.5,
+        r'\bquellen abwägen\b': 4.5,
+        r'\brechtliche analyse\b': 4.5,
+        r'\bvergleich(e|en)?\b': 3.5,
+    }
+
+
     # Brand/product patterns for shopping detection
     BRAND_PATTERNS = [
         # Tech brands
@@ -1033,7 +1127,13 @@ class QueryAnalyzer:
         direct_answer_score, direct_answer_matches = self._calculate_signal_score(
             query, self.DIRECT_ANSWER_SIGNALS
         )
-        
+        exa_deep_score, exa_deep_matches = self._calculate_signal_score(
+            query, self.EXA_DEEP_SIGNALS
+        )
+        exa_deep_reasoning_score, exa_deep_reasoning_matches = self._calculate_signal_score(
+            query, self.EXA_DEEP_REASONING_SIGNALS
+        )
+
         # Apply product/brand bonus to shopping
         brand_bonus = self._detect_product_brand_combo(query)
         if brand_bonus > 0:
@@ -1071,7 +1171,8 @@ class QueryAnalyzer:
         provider_scores = {
             "serper": shopping_score + local_news_score + (recency_score * 0.35),
             "tavily": research_score + (complexity["complexity_score"] if not complexity["is_complex"] else 0) + (0.2 * recency_score),
-            "exa": discovery_score + (1.0 if re.search(r"\b(similar|alternatives?|examples?)\b", query, re.IGNORECASE) else 0.0),
+            "querit": (research_score * 0.65) + (rag_score * 0.35) + (recency_score * 0.45),
+            "exa": discovery_score + (1.0 if re.search(r"\b(similar|alternatives?|examples?)\b", query, re.IGNORECASE) else 0.0) + (exa_deep_score * 0.5) + (exa_deep_reasoning_score * 0.5),
             "perplexity": direct_answer_score + (local_news_score * 0.4) + (recency_score * 0.55),
             "you": rag_score + (recency_score * 0.25),  # You.com good for real-time + RAG
             "searxng": privacy_score,  # SearXNG for privacy/multi-source queries
@@ -1081,7 +1182,8 @@ class QueryAnalyzer:
         provider_matches = {
             "serper": shopping_matches + local_news_matches,
             "tavily": research_matches,
-            "exa": discovery_matches,
+            "querit": research_matches,
+            "exa": discovery_matches + exa_deep_matches + exa_deep_reasoning_matches,
             "perplexity": direct_answer_matches,
             "you": rag_matches,
             "searxng": privacy_matches,
@@ -1095,6 +1197,8 @@ class QueryAnalyzer:
             "complexity": complexity,
             "recency_focused": is_recency,
             "recency_score": recency_score,
+            "exa_deep_score": exa_deep_score,
+            "exa_deep_reasoning_score": exa_deep_reasoning_score,
         }
     
     def route(self, query: str) -> Dict[str, Any]:
@@ -1107,8 +1211,8 @@ class QueryAnalyzer:
         # Filter to available providers
         disabled = set(self.auto_config.get("disabled_providers", []))
         available = {
-            p: s for p, s in scores.items() 
-            if p not in disabled and get_env_key(p)
+            p: s for p, s in scores.items()
+            if p not in disabled and get_api_key(p, self.config)
         }
         
         if not available:
@@ -1129,7 +1233,7 @@ class QueryAnalyzer:
         total_score = sum(available.values()) or 1.0
         
         # Handle ties using priority
-        priority = self.auto_config.get("provider_priority", ["tavily", "exa", "perplexity", "serper", "you", "searxng"])
+        priority = self.auto_config.get("provider_priority", ["tavily", "querit", "exa", "perplexity", "serper", "you", "searxng"])
         winners = [p for p, s in available.items() if s == max_score]
         
         if len(winners) > 1:
@@ -1179,18 +1283,29 @@ class QueryAnalyzer:
                 # (user might want similar search)
                 pass  # Keep current winner but note it
         
+        # Determine Exa search depth when routed to Exa
+        exa_depth = "normal"
+        if winner == "exa":
+            deep_r_score = analysis.get("exa_deep_reasoning_score", 0)
+            deep_score = analysis.get("exa_deep_score", 0)
+            if deep_r_score >= 4.0:
+                exa_depth = "deep-reasoning"
+            elif deep_score >= 4.0:
+                exa_depth = "deep"
+
         # Build detailed routing result
         threshold = self.auto_config.get("confidence_threshold", 0.3)
-        
+
         return {
             "provider": winner,
             "confidence": confidence,
             "confidence_level": "high" if confidence >= 0.7 else "medium" if confidence >= 0.4 else "low",
             "reason": reason,
+            "exa_depth": exa_depth,
             "scores": {p: round(s, 2) for p, s in available.items()},
             "winning_score": round(max_score, 2),
             "top_signals": [
-                {"matched": s["matched"], "weight": s["weight"]} 
+                {"matched": s["matched"], "weight": s["weight"]}
                 for s in top_signals
             ],
             "below_threshold": confidence < threshold,
@@ -1227,14 +1342,18 @@ def explain_routing(query: str, config: Dict[str, Any]) -> Dict[str, Any]:
             "confidence": routing["confidence"],
             "confidence_level": routing["confidence_level"],
             "reason": routing["reason"],
+            "exa_depth": routing.get("exa_depth", "normal"),
         },
         "scores": routing["scores"],
         "top_signals": routing["top_signals"],
         "intent_breakdown": {
             "shopping_signals": len(analysis["provider_matches"]["serper"]),
             "research_signals": len(analysis["provider_matches"]["tavily"]),
+            "querit_signals": len(analysis["provider_matches"]["querit"]),
             "discovery_signals": len(analysis["provider_matches"]["exa"]),
             "rag_signals": len(analysis["provider_matches"]["you"]),
+            "exa_deep_score": round(analysis.get("exa_deep_score", 0), 2),
+            "exa_deep_reasoning_score": round(analysis.get("exa_deep_reasoning_score", 0), 2),
         },
         "query_analysis": {
             "word_count": analysis["complexity"]["word_count"],
@@ -1252,12 +1371,17 @@ def explain_routing(query: str, config: Dict[str, Any]) -> Dict[str, Any]:
             if matches
         },
         "available_providers": [
-            p for p in ["serper", "tavily", "exa", "perplexity", "you", "searxng"] 
-            if get_env_key(p) and p not in config.get("auto_routing", {}).get("disabled_providers", [])
+            p for p in ["serper", "tavily", "querit", "exa", "perplexity", "you", "searxng"]
+            if get_api_key(p, config) and p not in config.get("auto_routing", {}).get("disabled_providers", [])
         ]
     }
 
 
+
+
+class ProviderConfigError(Exception):
+    """Raised when a provider is missing or has an invalid API key/config."""
+    pass
 
 
 class ProviderRequestError(Exception):
@@ -1327,6 +1451,24 @@ def reset_provider_health(provider: str) -> None:
         _save_provider_health(state)
 
 
+def _title_from_url(url: str) -> str:
+    """Derive a readable title from a URL when none is provided."""
+    try:
+        parsed = urlparse(url)
+        domain = parsed.netloc.replace("www.", "")
+        # Use last meaningful path segment as context
+        segments = [s for s in parsed.path.strip("/").split("/") if s]
+        if segments:
+            last = segments[-1].replace("-", " ").replace("_", " ")
+            # Strip file extensions
+            last = re.sub(r'\.\w{2,4}$', '', last)
+            if last:
+                return f"{domain} — {last[:80]}"
+        return domain
+    except Exception:
+        return url[:60]
+
+
 def normalize_result_url(url: str) -> str:
     if not url:
         return ""
@@ -1394,6 +1536,12 @@ def make_request(url: str, headers: dict, body: dict, timeout: int = 30) -> dict
         reason = str(getattr(e, "reason", e))
         is_timeout = "timed out" in reason.lower()
         raise ProviderRequestError(f"Network error: {reason}. Check your internet connection.", transient=is_timeout)
+    except IncompleteRead as e:
+        partial_len = len(getattr(e, "partial", b"") or b"")
+        raise ProviderRequestError(
+            f"Connection interrupted while reading response ({partial_len} bytes received). Please retry.",
+            transient=True,
+        )
     except TimeoutError:
         raise ProviderRequestError(f"Request timed out after {timeout}s. Try again or reduce max_results.", transient=True)
 
@@ -1544,7 +1692,115 @@ def search_tavily(
 
 
 # =============================================================================
-# Exa (Neural/Semantic Search)
+# Querit (Multi-lingual search API for AI, with rich metadata and real-time information)
+# =============================================================================
+
+def _map_querit_time_range(time_range: Optional[str]) -> Optional[str]:
+    """Map generic time ranges to Querit's compact date filter format."""
+    if not time_range:
+        return None
+    return {
+        "day": "d1",
+        "week": "w1",
+        "month": "m1",
+        "year": "y1",
+    }.get(time_range, time_range)
+
+
+def search_querit(
+    query: str,
+    api_key: str,
+    max_results: int = 5,
+    language: str = "en",
+    country: str = "us",
+    time_range: Optional[str] = None,
+    include_domains: Optional[List[str]] = None,
+    exclude_domains: Optional[List[str]] = None,
+    base_url: str = "https://api.querit.ai",
+    base_path: str = "/v1/search",
+    timeout: int = 30,
+) -> dict:
+    """Search using Querit.
+
+    Mirrors the Querit Python SDK payload shape:
+      - query
+      - count
+      - optional filters: languages, geo, sites, timeRange
+    """
+    endpoint = base_url.rstrip("/") + base_path
+
+    filters: Dict[str, Any] = {}
+    if language:
+        filters["languages"] = {"include": [language.lower()]}
+    if country:
+        filters["geo"] = {"countries": {"include": [country.upper()]}}
+    if include_domains or exclude_domains:
+        sites: Dict[str, List[str]] = {}
+        if include_domains:
+            sites["include"] = include_domains
+        if exclude_domains:
+            sites["exclude"] = exclude_domains
+        filters["sites"] = sites
+
+    querit_time_range = _map_querit_time_range(time_range)
+    if querit_time_range:
+        filters["timeRange"] = {"date": querit_time_range}
+
+    body: Dict[str, Any] = {
+        "query": query,
+        "count": max_results,
+    }
+    if filters:
+        body["filters"] = filters
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    data = make_request(endpoint, headers, body, timeout=timeout)
+
+    error_code = data.get("error_code")
+    error_msg = data.get("error_msg")
+    if error_msg or (error_code not in (None, 0, 200)):
+        message = error_msg or f"Querit request failed with error_code={error_code}"
+        raise ProviderRequestError(message)
+
+    raw_results = ((data.get("results") or {}).get("result")) or []
+    results = []
+    for i, item in enumerate(raw_results[:max_results]):
+        snippet = item.get("snippet") or item.get("page_age") or ""
+        result = {
+            "title": item.get("title") or _title_from_url(item.get("url", "")),
+            "url": item.get("url", ""),
+            "snippet": snippet,
+            "score": round(1.0 - i * 0.05, 3),
+        }
+        if item.get("page_time") is not None:
+            result["page_time"] = item["page_time"]
+        if item.get("page_age"):
+            result["date"] = item["page_age"]
+        if item.get("language") is not None:
+            result["language"] = item["language"]
+        results.append(result)
+
+    answer = results[0]["snippet"] if results else ""
+
+    return {
+        "provider": "querit",
+        "query": query,
+        "results": results,
+        "images": [],
+        "answer": answer,
+        "metadata": {
+            "search_id": data.get("search_id"),
+            "time_range": querit_time_range,
+        }
+    }
+
+
+# =============================================================================
+# Exa (Neural/Semantic/Deep Search)
 # =============================================================================
 
 def search_exa(
@@ -1552,22 +1808,43 @@ def search_exa(
     api_key: str,
     max_results: int = 5,
     search_type: str = "neural",
+    exa_depth: str = "normal",
     category: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     similar_url: Optional[str] = None,
     include_domains: Optional[List[str]] = None,
     exclude_domains: Optional[List[str]] = None,
+    text_verbosity: str = "standard",
 ) -> dict:
-    """Search using Exa (Neural/Semantic Search)."""
+    """Search using Exa (Neural/Semantic/Deep Search).
+
+    exa_depth controls synthesis level:
+      - "normal": standard search (neural/fast/auto/keyword/instant)
+      - "deep": multi-source synthesis with grounding (4-12s, $12/1k)
+      - "deep-reasoning": cross-reference reasoning with grounding (12-50s, $15/1k)
+    """
+    is_deep = exa_depth in ("deep", "deep-reasoning")
+
     if similar_url:
+        # findSimilar does not support deep search types
         endpoint = "https://api.exa.ai/findSimilar"
-        body = {
+        body: Dict[str, Any] = {
             "url": similar_url,
             "numResults": max_results,
             "contents": {
-                "text": {"maxCharacters": 1000},
-                "highlights": True,
+                "text": {"maxCharacters": 2000, "verbosity": text_verbosity},
+                "highlights": {"numSentences": 3, "highlightsPerUrl": 2},
+            },
+        }
+    elif is_deep:
+        endpoint = "https://api.exa.ai/search"
+        body = {
+            "query": query,
+            "numResults": max_results,
+            "type": exa_depth,
+            "contents": {
+                "text": {"maxCharacters": 5000, "verbosity": "full"},
             },
         }
     else:
@@ -1577,11 +1854,11 @@ def search_exa(
             "numResults": max_results,
             "type": search_type,
             "contents": {
-                "text": {"maxCharacters": 1000},
-                "highlights": True,
+                "text": {"maxCharacters": 2000, "verbosity": text_verbosity},
+                "highlights": {"numSentences": 3, "highlightsPerUrl": 2},
             },
         }
-    
+
     if category:
         body["category"] = category
     if start_date:
@@ -1592,19 +1869,91 @@ def search_exa(
         body["includeDomains"] = include_domains
     if exclude_domains:
         body["excludeDomains"] = exclude_domains
-    
+
     headers = {
         "x-api-key": api_key,
         "Content-Type": "application/json",
     }
-    
-    data = make_request(endpoint, headers, body)
-    
+
+    timeout = 55 if is_deep else 30
+    data = make_request(endpoint, headers, body, timeout=timeout)
+
     results = []
+
+    # Deep search: primary content in output field with grounding citations
+    if is_deep:
+        deep_output = data.get("output", {})
+        synthesized_text = ""
+        grounding_citations: List[Dict[str, Any]] = []
+
+        if isinstance(deep_output.get("content"), str):
+            synthesized_text = deep_output["content"]
+        elif isinstance(deep_output.get("content"), dict):
+            synthesized_text = json.dumps(deep_output["content"], ensure_ascii=False)
+
+        for field_citation in deep_output.get("grounding", []):
+            for cite in field_citation.get("citations", []):
+                grounding_citations.append({
+                    "url": cite.get("url", ""),
+                    "title": cite.get("title", ""),
+                    "confidence": field_citation.get("confidence", ""),
+                    "field": field_citation.get("field", ""),
+                })
+
+        # Primary synthesized result
+        if synthesized_text:
+            results.append({
+                "title": f"Exa {exa_depth.replace('-', ' ').title()} Synthesis",
+                "url": "",
+                "snippet": synthesized_text,
+                "full_synthesis": synthesized_text,
+                "score": 1.0,
+                "grounding": grounding_citations[:10],
+                "type": "synthesis",
+            })
+
+        # Supporting source documents
+        for item in data.get("results", [])[:max_results]:
+            text_content = item.get("text", "") or ""
+            highlights = item.get("highlights", [])
+            snippet = text_content[:800] if text_content else (highlights[0] if highlights else "")
+            results.append({
+                "title": item.get("title", ""),
+                "url": item.get("url", ""),
+                "snippet": snippet,
+                "score": round(item.get("score", 0.0), 3),
+                "published_date": item.get("publishedDate"),
+                "author": item.get("author"),
+                "type": "source",
+            })
+
+        answer = synthesized_text if synthesized_text else (results[1]["snippet"] if len(results) > 1 else "")
+
+        return {
+            "provider": "exa",
+            "query": query,
+            "exa_depth": exa_depth,
+            "results": results,
+            "images": [],
+            "answer": answer,
+            "grounding": grounding_citations,
+            "metadata": {
+                "synthesis_length": len(synthesized_text),
+                "source_count": len(data.get("results", [])),
+            },
+        }
+
+    # Standard search result parsing
     for item in data.get("results", [])[:max_results]:
+        text_content = item.get("text", "") or ""
         highlights = item.get("highlights", [])
-        snippet = highlights[0] if highlights else (item.get("text", "") or "")[:500]
-        
+        if text_content:
+            snippet = text_content[:800]
+        elif highlights:
+            snippet = " ... ".join(highlights[:2])
+        else:
+            snippet = ""
+
         results.append({
             "title": item.get("title", ""),
             "url": item.get("url", ""),
@@ -1613,9 +1962,9 @@ def search_exa(
             "published_date": item.get("publishedDate"),
             "author": item.get("author"),
         })
-    
+
     answer = results[0]["snippet"] if results else ""
-    
+
     return {
         "provider": "exa",
         "query": query if not similar_url else f"Similar to: {similar_url}",
@@ -1673,13 +2022,17 @@ def search_perplexity(
     message = choices[0].get("message", {}) if choices else {}
     answer = (message.get("content") or "").strip()
 
-    urls = re.findall(r"https?://[^\s)\]}>\"']+", answer)
-    unique_urls = []
-    seen = set()
-    for u in urls:
-        if u not in seen:
-            seen.add(u)
-            unique_urls.append(u)
+    # Prefer the structured citations array from Perplexity API response
+    api_citations = data.get("citations", [])
+
+    # Fallback: extract URLs from answer text if API doesn't provide citations
+    if not api_citations:
+        api_citations = []
+        seen = set()
+        for u in re.findall(r"https?://[^\s)\]}>\"']+", answer):
+            if u not in seen:
+                seen.add(u)
+                api_citations.append(u)
 
     results = []
 
@@ -1694,12 +2047,19 @@ def search_perplexity(
             "score": 1.0,
         })
 
-    # Additional results: extracted source URLs
-    for i, u in enumerate(unique_urls[:max_results - 1]):
+    # Source results from citations
+    for i, citation in enumerate(api_citations[:max_results - 1]):
+        # citations can be plain URL strings or dicts with url/title
+        if isinstance(citation, str):
+            url = citation
+            title = _title_from_url(url)
+        else:
+            url = citation.get("url", "")
+            title = citation.get("title") or _title_from_url(url)
         results.append({
-            "title": f"Source {i+1}",
-            "url": u,
-            "snippet": "Referenced source from Perplexity answer",
+            "title": title,
+            "url": url,
+            "snippet": f"Source cited in Perplexity answer [citation {i+1}]",
             "score": round(0.9 - i * 0.1, 3),
         })
 
@@ -2040,6 +2400,9 @@ Intelligent Auto-Routing:
   
   Research Intent → Tavily  
     "how does", "explain", "what is", analysis, pros/cons, tutorials
+
+  Multilingual + Real-Time AI Search → Querit
+    multilingual search, metadata-rich results, current information for AI workflows
   
   Discovery Intent → Exa (Neural)
     "similar to", "companies like", "alternatives", URLs, startups, papers
@@ -2060,7 +2423,7 @@ Full docs: See README.md and SKILL.md
     # Common arguments
     parser.add_argument(
         "--provider", "-p", 
-        choices=["serper", "tavily", "exa", "perplexity", "you", "searxng", "auto"],
+        choices=["serper", "tavily", "querit", "exa", "perplexity", "you", "searxng", "auto"],
         help="Search provider (auto=intelligent routing)"
     )
     parser.add_argument(
@@ -2120,12 +2483,38 @@ Full docs: See README.md and SKILL.md
     )
     parser.add_argument("--raw-content", action="store_true")
     
+    # Querit-specific
+    querit_config = config.get("querit", {})
+    parser.add_argument(
+        "--querit-base-url",
+        default=querit_config.get("base_url", "https://api.querit.ai"),
+        help="Querit API base URL"
+    )
+    parser.add_argument(
+        "--querit-base-path",
+        default=querit_config.get("base_path", "/v1/search"),
+        help="Querit API path"
+    )
+
     # Exa-specific
     exa_config = config.get("exa", {})
     parser.add_argument(
-        "--exa-type", 
-        default=exa_config.get("type", "neural"), 
-        choices=["neural", "keyword"]
+        "--exa-type",
+        default=exa_config.get("type", "neural"),
+        choices=["neural", "fast", "auto", "keyword", "instant"],
+        help="Exa search type (for standard search, ignored when --exa-depth is set)"
+    )
+    parser.add_argument(
+        "--exa-depth",
+        default=exa_config.get("depth", "normal"),
+        choices=["normal", "deep", "deep-reasoning"],
+        help="Exa search depth: deep (synthesized, 4-12s), deep-reasoning (cross-reference, 12-50s)"
+    )
+    parser.add_argument(
+        "--exa-verbosity",
+        default=exa_config.get("verbosity", "standard"),
+        choices=["compact", "standard", "full"],
+        help="Exa text verbosity for content extraction"
     )
     parser.add_argument(
         "--category",
@@ -2157,10 +2546,9 @@ Full docs: See README.md and SKILL.md
         help="You.com: fetch full page content"
     )
     parser.add_argument(
-        "--include-news",
+        "--no-news",
         action="store_true",
-        default=True,
-        help="You.com: include news results (default: true)"
+        help="You.com: exclude news results (included by default)"
     )
     
     # SearXNG-specific
@@ -2275,13 +2663,15 @@ Full docs: See README.md and SKILL.md
     
     # Build provider fallback list
     auto_config = config.get("auto_routing", {})
-    provider_priority = auto_config.get("provider_priority", ["tavily", "exa", "perplexity", "serper"])
+    provider_priority = auto_config.get("provider_priority", ["tavily", "querit", "exa", "perplexity", "serper", "you", "searxng"])
     disabled_providers = auto_config.get("disabled_providers", [])
 
     # Start with the selected provider, then try others in priority order
+    # Only include providers that have a configured API key (except the primary,
+    # which gets a clear error if unconfigured and no fallback succeeds)
     providers_to_try = [provider]
     for p in provider_priority:
-        if p not in providers_to_try and p not in disabled_providers:
+        if p not in providers_to_try and p not in disabled_providers and get_api_key(p, config):
             providers_to_try.append(p)
 
     # Skip providers currently in cooldown
@@ -2323,18 +2713,38 @@ Full docs: See README.md and SKILL.md
                 include_images=args.images,
                 include_raw_content=args.raw_content,
             )
+        elif prov == "querit":
+            return search_querit(
+                query=args.query,
+                api_key=key,
+                max_results=args.max_results,
+                language=args.language,
+                country=args.country,
+                time_range=args.time_range or args.freshness,
+                include_domains=args.include_domains,
+                exclude_domains=args.exclude_domains,
+                base_url=args.querit_base_url,
+                base_path=args.querit_base_path,
+                timeout=int(querit_config.get("timeout", 30)),
+            )
         elif prov == "exa":
+            # CLI --exa-depth overrides; fallback to auto-routing suggestion
+            exa_depth = args.exa_depth
+            if exa_depth == "normal" and routing_info.get("exa_depth") in ("deep", "deep-reasoning"):
+                exa_depth = routing_info["exa_depth"]
             return search_exa(
                 query=args.query or "",
                 api_key=key,
                 max_results=args.max_results,
                 search_type=args.exa_type,
+                exa_depth=exa_depth,
                 category=args.category,
                 start_date=args.start_date,
                 end_date=args.end_date,
                 similar_url=args.similar_url,
                 include_domains=args.include_domains,
                 exclude_domains=args.exclude_domains,
+                text_verbosity=args.exa_verbosity,
             )
         elif prov == "perplexity":
             perplexity_config = config.get("perplexity", {})
@@ -2355,7 +2765,7 @@ Full docs: See README.md and SKILL.md
                 language=args.language,
                 freshness=args.freshness,
                 safesearch=args.you_safesearch,
-                include_news=args.include_news,
+                include_news=not args.no_news,
                 livecrawl=args.livecrawl,
             )
         elif prov == "searxng":
@@ -2400,11 +2810,15 @@ Full docs: See README.md and SKILL.md
         "locale": f"{args.country}:{args.language}",
         "freshness": args.freshness,
         "time_range": args.time_range,
+        "include_domains": sorted(args.include_domains) if args.include_domains else None,
+        "exclude_domains": sorted(args.exclude_domains) if args.exclude_domains else None,
         "topic": args.topic,
         "search_engines": sorted(args.engines) if args.engines else None,
-        "include_news": bool(args.include_news),
+        "include_news": not args.no_news,
         "search_type": args.search_type,
         "exa_type": args.exa_type,
+        "exa_depth": args.exa_depth,
+        "exa_verbosity": args.exa_verbosity,
         "category": args.category,
         "similar_url": args.similar_url,
     }

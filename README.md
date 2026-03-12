@@ -1,14 +1,14 @@
 # Web Search Plus
 
-> Unified multi-provider web search with **Intelligent Auto-Routing** — uses multi-signal analysis to automatically select between **Serper**, **Tavily**, **Exa**, **Perplexity (Sonar Pro)**, **You.com**, and **SearXNG** with confidence scoring.
+> Unified multi-provider web search with **Intelligent Auto-Routing** — uses multi-signal analysis to automatically select between **Serper**, **Tavily**, **Querit**, **Exa**, **Perplexity (Sonar Pro)**, **You.com**, and **SearXNG** with confidence scoring.
 
 [![ClawHub](https://img.shields.io/badge/ClawHub-web--search--plus-blue)](https://clawhub.ai)
-[![Version](https://img.shields.io/badge/version-2.8.5-green)](https://clawhub.ai)
+[![Version](https://img.shields.io/badge/version-2.9.0-green)](https://clawhub.ai)
 [![GitHub](https://img.shields.io/badge/GitHub-web--search--plus-blue)](https://github.com/robbyczgw-cla/web-search-plus)
 
 ---
 
-## 🧠 Features (v2.8.5)
+## 🧠 Features (v2.9.0)
 
 **Intelligent Multi-Signal Routing** — The skill uses sophisticated query analysis:
 
@@ -50,6 +50,13 @@ python3 scripts/search.py -q "search privately without tracking" # → SearXNG (
 - 📄 **Need full page content** (not just snippets)
 - 🎓 **Academic/technical research**
 - 🔒 **Domain filtering** (trusted sources)
+
+### Querit (Multilingual AI Search)
+- 🌏 **Multilingual AI search** across 10+ languages
+- ⚡ **Fast real-time answers** with ~400ms latency
+- 🗺️ **International / cross-language queries**
+- 📰 **Recency-aware results** for current information
+- 🤖 **Good fit for AI workflows** with clean metadata
 
 ### Exa (Neural Semantic Search)
 - 🔗 **Find similar pages**
@@ -111,6 +118,7 @@ The wizard explains each provider, collects your API keys, and creates `config.j
 # 1. Set up at least one API key (or SearXNG instance)
 export SERPER_API_KEY="your-key"   # https://serper.dev
 export TAVILY_API_KEY="your-key"   # https://tavily.com
+export QUERIT_API_KEY="your-key"   # https://querit.ai
 export EXA_API_KEY="your-key"      # https://exa.ai
 export KILOCODE_API_KEY="your-key" # enables Perplexity Sonar Pro via https://api.kilo.ai
 export YOU_API_KEY="your-key"      # https://api.you.com
@@ -129,6 +137,7 @@ python3 scripts/search.py -q "best laptop 2024"
 # Or specify a provider explicitly
 python3 scripts/search.py -p serper -q "iPhone 16 specs"
 python3 scripts/search.py -p tavily -q "quantum computing explained" --depth advanced
+python3 scripts/search.py -p querit -q "latest AI policy updates in Germany"
 python3 scripts/search.py -p exa -q "AI startups 2024" --category company
 python3 scripts/search.py -p perplexity -q "Who is the president of Austria?"
 ```
@@ -149,6 +158,7 @@ When you don't specify a provider, the skill analyzes your query and routes it t
 | "how does", "explain", "what is" | **Tavily** | "how does TCP work" |
 | "research", "study", "analyze" | **Tavily** | "climate research" |
 | "tutorial", "guide", "learn" | **Tavily** | "python tutorial" |
+| multilingual, current status, latest updates | **Querit** | "latest AI policy updates in Germany" |
 | "similar to", "companies like" | **Exa** | "companies like Stripe" |
 | "startup", "Series A" | **Exa** | "AI startups Series A" |
 | "github", "research paper" | **Exa** | "LLM papers arxiv" |
@@ -161,6 +171,7 @@ When you don't specify a provider, the skill analyzes your query and routes it t
 # These are all auto-routed to the optimal provider:
 python3 scripts/search.py -q "MacBook Pro M3 price"           # → Serper
 python3 scripts/search.py -q "how does HTTPS work"            # → Tavily
+python3 scripts/search.py -q "latest AI policy updates in Germany" # → Querit
 python3 scripts/search.py -q "startups like Notion"           # → Exa
 python3 scripts/search.py -q "best sushi restaurant near me"  # → Serper
 python3 scripts/search.py -q "explain attention mechanism"    # → Tavily
@@ -746,7 +757,7 @@ All providers return unified JSON:
 | Option | Providers | Description |
 |--------|-----------|-------------|
 | `-q, --query` | All | Search query |
-| `-p, --provider` | All | Provider: auto, serper, tavily, exa, you, searxng |
+| `-p, --provider` | All | Provider: auto, serper, tavily, querit, exa, perplexity, you, searxng |
 | `-n, --max-results` | All | Max results (default: 5) |
 | `--auto` | All | Force auto-routing |
 | `--explain-routing` | All | Debug auto-routing |
@@ -758,6 +769,8 @@ All providers return unified JSON:
 | `--depth` | Tavily | basic/advanced |
 | `--topic` | Tavily | general/news |
 | `--raw-content` | Tavily | Include full page content |
+| `--querit-base-url` | Querit | Override Querit API base URL |
+| `--querit-base-path` | Querit | Override Querit API path |
 | `--exa-type` | Exa | neural/keyword |
 | `--category` | Exa | company/research paper/news/pdf/github/tweet |
 | `--start-date` | Exa | Start date (YYYY-MM-DD) |
