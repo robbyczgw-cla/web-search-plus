@@ -9,9 +9,11 @@
     "enabled": true,
     "fallback_provider": "serper",
     "provider_priority": [
-      "serper",
       "tavily",
+      "querit",
       "exa",
+      "perplexity",
+      "serper",
       "you",
       "searxng"
     ],
@@ -195,6 +197,27 @@
         "alle suchmaschinen",
         "kostenlose suche",
         "keine api kosten"
+      ],
+      "querit": [
+        "multilingual",
+        "current status",
+        "latest updates",
+        "status of",
+        "real-time",
+        "summarize",
+        "global search",
+        "cross-language",
+        "international",
+        "aktuell",
+        "zusammenfassung"
+      ],
+      "perplexity": [
+        "what is",
+        "current status",
+        "status of",
+        "what happened with",
+        "events in",
+        "things to do in"
       ]
     }
   },
@@ -228,5 +251,15 @@
     "safesearch": 0,
     "engines": null,
     "language": "en"
+  },
+  "querit_api_key": "",
+  "querit": {
+    "base_url": "https://api.querit.ai",
+    "base_path": "/v1/search",
+    "timeout": 10
+  },
+  "perplexity": {
+    "api_url": "https://api.kilo.ai/api/gateway/chat/completions",
+    "model": "perplexity/sonar-pro"
   }
 }

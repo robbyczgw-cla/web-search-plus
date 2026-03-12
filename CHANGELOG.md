@@ -1,5 +1,42 @@
 # Changelog - Web Search Plus
 
+## [2.9.0] - 2026-03-12
+
+### ✨ New Provider: Querit (Multilingual AI Search)
+
+[Querit.ai](https://querit.ai) is a Singapore-based multilingual AI search API purpose-built for LLMs and RAG pipelines. 300 billion page index, 20+ countries, 10+ languages.
+
+- Added **Querit** as the 7th search provider via `https://api.querit.ai/v1/search`
+- Configure via `QUERIT_API_KEY` — optional, gracefully skipped if not set
+- Routing score: `research * 0.65 + rag * 0.35 + recency * 0.45` — favored for multilingual and real-time queries
+- Handles Querit's quirky `error_code=200` responses as success (not an error)
+- Handles `IncompleteRead` as transient/retryable failure
+- Live-tested with 10 benchmark queries ✅
+
+### 🔧 Fixed: Fallback chain dies on unconfigured provider
+
+- `sys.exit(1)` in `validate_api_key()` raised `SystemExit` (inherits from `BaseException`), which bypassed the `except Exception` fallback loop and killed the entire process instead of trying the next provider
+- Replaced with catchable `ProviderConfigError` — fallback chain now continues correctly through all configured providers
+
+### 🔧 Fixed: Perplexity citations are generic placeholders
+
+- Previously extracted citation URLs via regex from the answer text, resulting in generic "Source 1" / "Source 2" labels
+- Now uses the structured `data["citations"]` array from the Perplexity API response directly — results have readable titles
+- Regex extraction kept as fallback when API doesn't return a `citations` field
+
+### ✨ Improved: German locale routing patterns
+
+- Added German-language signal patterns for local and news queries
+- Improves auto-routing for queries like `"aktuelle Nachrichten"`, `"beste Restaurants Graz"`, `"KI Regulierung Europa"`
+
+### 📝 Documentation
+
+- Added Querit to README provider tables, routing examples, and API key setup section
+- Added `querit_api_key` to `config.example.json`
+- Updated `SKILL.md` provider mentions and env metadata
+- Bumped package version to `2.9.0`
+
+
 ## [2.8.6] - 2026-03-03
 
 ### Changed
