@@ -50,7 +50,7 @@
 
 **Solutions:**
 1. Check directory permissions: `chmod 755 .cache/`
-2. Use custom cache dir: `export WSP_CACHE_DIR="/tmp/wsp-cache"`
+2. Use custom cache dir: `export WSP_CACHE_DIR="$TMP_DIR/wsp-cache"`
 
 ---
 
