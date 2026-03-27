@@ -1,5 +1,10 @@
 # Changelog - Web Search Plus
 
+## [2.9.1] - 2026-03-27
+
+### Fixed
+- Replaced hardcoded temporary cache path examples with portable `$TMP_DIR` placeholders in `TROUBLESHOOTING.md`
+
 ## [2.9.0] - 2026-03-12
 
 ### ✨ New Provider: Querit (Multilingual AI Search)
