@@ -35,6 +35,11 @@ from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlparse
 
+try:
+    from . import docker_detect
+except ImportError:
+    docker_detect = None
+
 
 # =============================================================================
 # Result Caching
@@ -422,7 +427,10 @@ def get_searxng_instance_url(config: Dict[str, Any] = None) -> Optional[str]:
     """Get SearXNG instance URL from config or environment.
     
     SearXNG is self-hosted, so no API key needed - just the instance URL.
-    Priority: config.json > SEARXNG_INSTANCE_URL environment variable
+    Priority: config.json > SEARXNG_INSTANCE_URL environment variable > auto-detect
+    
+    Auto-detection: If running in Docker and no URL is configured,
+    automatically uses 172.17.0.1:8080 (Docker bridge). On host, uses 127.0.0.1:8080.
     
     Security: URL is validated to prevent SSRF via scheme enforcement.
     Both config sources (config.json, env var) are operator-controlled,
@@ -440,6 +448,12 @@ def get_searxng_instance_url(config: Dict[str, Any] = None) -> Optional[str]:
     env_url = os.environ.get("SEARXNG_INSTANCE_URL")
     if env_url:
         return _validate_searxng_url(env_url)
+    
+    # Auto-detect based on Docker environment
+    if docker_detect:
+        return _validate_searxng_url(docker_detect.get_searxng_url())
+    
+    return None
     return None
 
 
