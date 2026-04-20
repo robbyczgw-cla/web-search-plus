@@ -1,6 +1,6 @@
 {
   "name": "@openclaw/web-search-plus",
-  "version": "2.9.0",
+  "version": "2.9.3",
   "description": "Unified search skill with Intelligent Auto-Routing. Uses multi-signal analysis (intent classification, linguistic patterns, URL/brand detection) to automatically select between Serper (Google), Tavily (Research), Querit (Multilingual AI Search), Exa (Neural), Perplexity (AI Answers), You.com (RAG/Real-time), and SearXNG (Privacy/Self-hosted) with confidence scoring.",
   "keywords": [
     "openclaw",

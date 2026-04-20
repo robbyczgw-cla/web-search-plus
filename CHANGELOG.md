@@ -1,5 +1,19 @@
 # Changelog - Web Search Plus
 
+## [2.9.3] - 2026-04-20
+
+### Added
+- Docker-aware SearXNG auto-detection for zero-config local setups
+- New `scripts/docker_detect.py` helper that detects containerized execution via `/.dockerenv`, `/proc/1/cgroup`, and `DOCKER`
+
+### Changed
+- `get_searxng_instance_url()` now falls back to auto-detected defaults when no explicit SearXNG URL is configured
+- Uses `http://172.17.0.1:8080` inside Docker sandboxes and `http://127.0.0.1:8080` on the host for smoother local SearXNG access
+
+### Release Notes
+- Bumped skill/package metadata for the 2.9.3 ClawHub publish
+- Based on merged GitHub PR #2: `feat: add Docker-aware SearXNG auto-detection`
+
 ## [2.9.2] - 2026-03-27
 
 ### Fixed
