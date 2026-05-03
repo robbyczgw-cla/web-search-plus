@@ -1,24 +1,14 @@
-import importlib.util
 import os
+import sys
 import unittest
 from pathlib import Path
 from unittest import mock
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
-SEARCH_PATH = SKILL_DIR / "scripts" / "search.py"
-EXTRACT_PATH = SKILL_DIR / "scripts" / "extract.py"
+if str(SKILL_DIR) not in sys.path:
+    sys.path.insert(0, str(SKILL_DIR))
 
-
-def load_module(name: str, path: Path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
-    return module
-
-
-search = load_module("wsp_search_test", SEARCH_PATH)
-extract = load_module("wsp_extract_test", EXTRACT_PATH)
+from scripts import extract, search
 
 
 class RoutingParityTests(unittest.TestCase):
