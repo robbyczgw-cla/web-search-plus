@@ -1,15 +1,18 @@
 {
   "name": "@openclaw/web-search-plus",
-  "version": "2.9.3",
-  "description": "Unified search skill with Intelligent Auto-Routing. Uses multi-signal analysis (intent classification, linguistic patterns, URL/brand detection) to automatically select between Serper (Google), Tavily (Research), Querit (Multilingual AI Search), Exa (Neural), Perplexity (AI Answers), You.com (RAG/Real-time), and SearXNG (Privacy/Self-hosted) with confidence scoring.",
+  "version": "3.0.0",
+  "description": "Unified multi-provider web search and URL extraction skill with intelligent auto-routing across Serper, Brave, Tavily, Querit, Linkup, Exa, Firecrawl, Perplexity, You.com, and SearXNG.",
   "keywords": [
     "openclaw",
     "skill",
     "search",
     "web-search",
     "serper",
+    "brave",
     "tavily",
+    "linkup",
     "exa",
+    "firecrawl",
     "you",
     "you.com",
     "google-search",
@@ -28,7 +31,12 @@
     "free-tier",
     "api-aggregator",
     "querit",
-    "multilingual-search"
+    "multilingual-search",
+    "web-extract",
+    "content-extraction",
+    "firecrawl",
+    "brave-search",
+    "linkup"
   ],
   "author": "robbyczgw-cla",
   "license": "MIT",
@@ -52,13 +60,17 @@
       "web-search",
       "image-search",
       "semantic-search",
-      "multi-provider"
+      "multi-provider",
+      "web-extract"
     ],
     "providers": [
       "serper",
+      "brave",
       "tavily",
       "querit",
+      "linkup",
       "exa",
+      "firecrawl",
       "perplexity",
       "you",
       "searxng"
@@ -70,12 +82,16 @@
       ],
       "env": {
         "SERPER_API_KEY": "optional",
+        "BRAVE_API_KEY": "optional",
         "TAVILY_API_KEY": "optional",
-        "EXA_API_KEY": "optional",
-        "YOU_API_KEY": "optional",
-        "SEARXNG_INSTANCE_URL": "optional",
         "QUERIT_API_KEY": "optional",
-        "KILOCODE_API_KEY": "optional"
+        "LINKUP_API_KEY": "optional",
+        "EXA_API_KEY": "optional",
+        "FIRECRAWL_API_KEY": "optional",
+        "PERPLEXITY_API_KEY": "optional — direct Perplexity provider credential",
+        "KILOCODE_API_KEY": "optional — alternative Perplexity provider via Kilo Gateway",
+        "YOU_API_KEY": "optional",
+        "SEARXNG_INSTANCE_URL": "optional"
       }
     }
   },
@@ -83,6 +99,8 @@
     "SKILL.md",
     "README.md",
     "scripts/",
-    ".env.example"
+    ".env.example",
+    "config.example.json",
+    "CHANGELOG.md"
   ]
 }

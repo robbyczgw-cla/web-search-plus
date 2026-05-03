@@ -47,31 +47,71 @@ def print_provider_info():
     """Print information about each provider."""
     print(color("📚 Available Providers:", Colors.BOLD))
     print()
-    
+
     providers = [
         {
             "name": "Serper",
             "emoji": "🔎",
-            "best_for": "Google results, shopping, local businesses, news",
+            "best_for": "Google-style general web, shopping, local, news",
             "free_tier": "2,500 queries/month",
             "signup": "https://serper.dev",
-            "strengths": ["Fastest response times", "Product prices & specs", "Knowledge Graph", "Local business data"]
+            "strengths": ["Shopping and local intent", "Knowledge Graph", "Broad fallback coverage"]
         },
         {
-            "name": "Tavily", 
+            "name": "Brave",
+            "emoji": "🦁",
+            "best_for": "Independent general web index, broad factual queries",
+            "free_tier": "$5/mo free credits",
+            "signup": "https://brave.com/search/api/",
+            "strengths": ["Independent index", "Good generic-web fallback", "Pairs well with Serper tie-breaking"]
+        },
+        {
+            "name": "Tavily",
             "emoji": "📖",
             "best_for": "Research, explanations, in-depth analysis",
             "free_tier": "1,000 queries/month",
             "signup": "https://tavily.com",
-            "strengths": ["AI-synthesized answers", "Full page content", "Domain filtering", "Academic research"]
+            "strengths": ["Research intent", "Full page content", "Academic-friendly"]
+        },
+        {
+            "name": "Querit",
+            "emoji": "🌍",
+            "best_for": "Multilingual, international, recency-aware AI search",
+            "free_tier": "Varies",
+            "signup": "https://querit.ai",
+            "strengths": ["Cross-language queries", "International updates", "AI-ready metadata"]
+        },
+        {
+            "name": "Linkup",
+            "emoji": "🔗",
+            "best_for": "Source-grounded search, citations, evidence-first retrieval",
+            "free_tier": "€5 free monthly credits",
+            "signup": "https://linkup.so",
+            "strengths": ["Citation-heavy queries", "Grounding", "Good companion to extraction"]
         },
         {
             "name": "Exa",
             "emoji": "🧠",
-            "best_for": "Semantic search, finding similar content, discovery",
-            "free_tier": "1,000 queries/month", 
+            "best_for": "Semantic search, discovery, deep and deep-reasoning modes",
+            "free_tier": "1,000 queries/month",
             "signup": "https://exa.ai",
-            "strengths": ["Neural/semantic understanding", "Similar page discovery", "Startup/company finder", "Date filtering"]
+            "strengths": ["Semantic discovery", "Similar pages", "Deep synthesis"]
+        },
+        {
+            "name": "Firecrawl",
+            "emoji": "🔥",
+            "best_for": "Search with scrape-ready content and extraction-friendly metadata",
+            "free_tier": "Free plan credits",
+            "signup": "https://www.firecrawl.dev/app/api-keys",
+            "strengths": ["Search + scrape metadata", "Recency filters", "Great extraction fallback"]
+        },
+        {
+            "name": "Perplexity via Kilo",
+            "emoji": "⚡",
+            "best_for": "Direct answers with citations",
+            "free_tier": "Depends on Kilo plan",
+            "signup": "https://kilo.ai",
+            "strengths": ["Answer-first output", "Current status questions", "Citation support"]
         },
         {
             "name": "You.com",
@@ -79,7 +119,7 @@ def print_provider_info():
             "best_for": "RAG applications, real-time info, LLM-ready snippets",
             "free_tier": "Limited free tier",
             "signup": "https://api.you.com",
-            "strengths": ["LLM-ready snippets", "Combined web + news", "Live page crawling", "Real-time information"]
+            "strengths": ["LLM-ready snippets", "Combined web + news", "Live content API"]
         },
         {
             "name": "SearXNG",
@@ -87,10 +127,10 @@ def print_provider_info():
             "best_for": "Privacy-first search, multi-source aggregation, $0 API cost",
             "free_tier": "FREE (self-hosted)",
             "signup": "https://docs.searxng.org/admin/installation.html",
-            "strengths": ["Privacy-preserving (no tracking)", "70+ search engines", "Self-hosted = $0 API cost", "Diverse results"]
+            "strengths": ["Privacy-preserving", "70+ search engines", "Self-hosted control"]
         }
     ]
-    
+
     for p in providers:
         print(f"  {p['emoji']} {color(p['name'], Colors.BOLD)}")
         print(f"     Best for: {color(p['best_for'], Colors.GREEN)}")
@@ -117,40 +157,40 @@ def ask_choice(prompt: str, options: list, default: str = None) -> str:
     for i, opt in enumerate(options, 1):
         marker = color("→", Colors.GREEN) if opt == default else " "
         print(f"  {marker} {i}. {opt}")
-    
+
     while True:
         hint = f" [default: {default}]" if default else ""
         response = input(f"Enter number (1-{len(options)}){color(hint, Colors.DIM)}: ").strip()
-        
+
         if response == "" and default:
             return default
-        
+
         try:
             idx = int(response)
             if 1 <= idx <= len(options):
                 return options[idx - 1]
         except ValueError:
             pass
-        
+
         print(color(f"  Please enter a number between 1 and {len(options)}", Colors.YELLOW))
 
 def ask_api_key(provider: str, signup_url: str) -> str:
     """Ask for an API key with validation."""
     print()
     print(f"  {color(f'Get your {provider} API key:', Colors.DIM)} {color(signup_url, Colors.BLUE)}")
-    
+
     while True:
         key = input(f"  Enter your {provider} API key: ").strip()
-        
+
         if not key:
             print(color("    ⚠️  No key entered. This provider will be disabled.", Colors.YELLOW))
             return None
-        
+
         # Basic validation
         if len(key) < 10:
             print(color("    ⚠️  Key seems too short. Please check and try again.", Colors.YELLOW))
             continue
-        
+
         # Mask key for confirmation
         masked = key[:4] + "..." + key[-4:] if len(key) > 12 else key[:2] + "..."
         print(color(f"    ✓ Key saved: {masked}", Colors.GREEN))
@@ -167,19 +207,19 @@ def ask_searxng_instance(docs_url: str) -> str:
     print(f"    • http://localhost:8080 (local Docker)")
     print(f"    • https://searx.your-domain.com (self-hosted)")
     print()
-    
+
     while True:
         url = input(f"  Enter your SearXNG instance URL: ").strip()
-        
+
         if not url:
             print(color("    ⚠️  No URL entered. SearXNG will be disabled.", Colors.YELLOW))
             return None
-        
+
         # Basic URL validation
         if not url.startswith(("http://", "https://")):
             print(color("    ⚠️  URL must start with http:// or https://", Colors.YELLOW))
             continue
-        
+
         # SSRF protection: validate URL before connecting
         try:
             import ipaddress
@@ -212,18 +252,18 @@ def ask_searxng_instance(docs_url: str) -> str:
         try:
             import urllib.request
             import urllib.error
-            
+
             test_url = f"{url.rstrip('/')}/search?q=test&format=json"
             req = urllib.request.Request(
                 test_url,
                 headers={"User-Agent": "ClawdBot-WebSearchPlus/2.5", "Accept": "application/json"}
             )
-            
+
             with urllib.request.urlopen(req, timeout=10) as response:
                 data = response.read().decode("utf-8")
                 import json
                 result = json.loads(data)
-                
+
                 # Check if it looks like SearXNG JSON response
                 if "results" in result or "query" in result:
                     print(color(f"    ✓ Connection successful! SearXNG instance is working.", Colors.GREEN))
@@ -232,24 +272,24 @@ def ask_searxng_instance(docs_url: str) -> str:
                     print(color(f"    ⚠️  Connected but response doesn't look like SearXNG JSON.", Colors.YELLOW))
                     if ask_yes_no("    Use this URL anyway?", default=False):
                         return url.rstrip("/")
-                        
+
         except urllib.error.HTTPError as e:
             if e.code == 403:
                 print(color(f"    ⚠️  JSON API is disabled (403 Forbidden).", Colors.YELLOW))
                 print(color(f"       Enable JSON in settings.yml: search.formats: [html, json]", Colors.DIM))
             else:
                 print(color(f"    ⚠️  HTTP error: {e.code} {e.reason}", Colors.YELLOW))
-            
+
             if ask_yes_no("    Try a different URL?", default=True):
                 continue
             return None
-            
+
         except urllib.error.URLError as e:
             print(color(f"    ⚠️  Cannot reach instance: {e.reason}", Colors.YELLOW))
             if ask_yes_no("    Try a different URL?", default=True):
                 continue
             return None
-            
+
         except Exception as e:
             print(color(f"    ⚠️  Error: {e}", Colors.YELLOW))
             if ask_yes_no("    Try a different URL?", default=True):
@@ -260,7 +300,7 @@ def ask_result_count() -> int:
     """Ask for default result count."""
     options = ["3 (fast, minimal)", "5 (balanced - recommended)", "10 (comprehensive)"]
     choice = ask_choice("Default number of results per search?", options, "5 (balanced - recommended)")
-    
+
     if "3" in choice:
         return 3
     elif "10" in choice:
@@ -271,7 +311,7 @@ def run_setup(skill_dir: Path, force_reset: bool = False):
     """Run the interactive setup wizard."""
     config_path = skill_dir / "config.json"
     example_path = skill_dir / "config.example.json"
-    
+
     # Check if config already exists
     if config_path.exists() and not force_reset:
         print(color("✓ config.json already exists!", Colors.GREEN))
@@ -280,10 +320,10 @@ def run_setup(skill_dir: Path, force_reset: bool = False):
             print(color("Setup cancelled. Your existing config is unchanged.", Colors.DIM))
             return False
         print()
-    
+
     print_header()
     print_provider_info()
-    
+
     # Load example config as base
     if example_path.exists():
         with open(example_path) as f:
@@ -293,35 +333,47 @@ def run_setup(skill_dir: Path, force_reset: bool = False):
             "defaults": {"provider": "serper", "max_results": 5},
             "auto_routing": {"enabled": True, "fallback_provider": "serper"},
             "serper": {},
+            "brave": {},
             "tavily": {},
-            "exa": {}
+            "querit": {},
+            "linkup": {},
+            "exa": {},
+            "firecrawl": {},
+            "perplexity": {},
+            "you": {},
+            "searxng": {}
         }
-    
+
     # Remove any existing API keys from example
-    for provider in ["serper", "tavily", "exa"]:
+    for provider in ["serper", "brave", "tavily", "querit", "linkup", "exa", "firecrawl", "perplexity", "you"]:
         if provider in config:
             config[provider].pop("api_key", None)
-    
+
     enabled_providers = []
-    
+
     # ===== Question 1: Which providers to enable =====
     print(color("─" * 60, Colors.DIM))
     print(color("\n📋 Step 1: Choose Your Providers\n", Colors.BOLD))
     print("Select which search providers you want to enable.")
     print(color("(You need at least one API key to use this skill)", Colors.DIM))
     print()
-    
+
     providers_info = {
-        "serper": ("Serper", "https://serper.dev", "Google results, shopping, local"),
+        "serper": ("Serper", "https://serper.dev", "Google-style results, shopping, local"),
+        "brave": ("Brave", "https://brave.com/search/api/", "Independent general web search"),
         "tavily": ("Tavily", "https://tavily.com", "Research, explanations, analysis"),
-        "exa": ("Exa", "https://exa.ai", "Semantic search, similar content"),
+        "querit": ("Querit", "https://querit.ai", "Multilingual and international AI search"),
+        "linkup": ("Linkup", "https://linkup.so", "Citation and source-grounded search"),
+        "exa": ("Exa", "https://exa.ai", "Semantic search, discovery, deep synthesis"),
+        "firecrawl": ("Firecrawl", "https://www.firecrawl.dev/app/api-keys", "Search with scrape-ready metadata"),
+        "perplexity": ("Perplexity via Kilo", "https://kilo.ai", "Direct answers with citations"),
         "you": ("You.com", "https://api.you.com", "RAG applications, real-time info"),
         "searxng": ("SearXNG", "https://docs.searxng.org/admin/installation.html", "Privacy-first, self-hosted, $0 cost")
     }
-    
+
     for provider, (name, url, desc) in providers_info.items():
         print(f"  {color(name, Colors.BOLD)}: {desc}")
-        
+
         # Special handling for SearXNG
         if provider == "searxng":
             print(color("    Note: SearXNG requires a self-hosted instance (no API key needed)", Colors.DIM))
@@ -348,18 +400,18 @@ def run_setup(skill_dir: Path, force_reset: bool = False):
             else:
                 print(color(f"    → {name} disabled", Colors.DIM))
         print()
-    
+
     if not enabled_providers:
         print()
         print(color("⚠️  No providers enabled!", Colors.RED))
         print("You need at least one API key to use web-search-plus.")
         print("Run this setup again when you have an API key.")
         return False
-    
+
     # ===== Question 3: Default provider =====
     print(color("─" * 60, Colors.DIM))
     print(color("\n⚙️  Step 2: Default Settings\n", Colors.BOLD))
-    
+
     if len(enabled_providers) > 1:
         default_provider = ask_choice(
             "Which provider should be the default for general queries?",
@@ -369,45 +421,45 @@ def run_setup(skill_dir: Path, force_reset: bool = False):
     else:
         default_provider = enabled_providers[0]
         print(f"Default provider: {color(default_provider, Colors.GREEN)} (only one enabled)")
-    
+
     config["defaults"]["provider"] = default_provider
     config["auto_routing"]["fallback_provider"] = default_provider
-    
+
     # ===== Question 4: Auto-routing =====
     print()
     print(color("Auto-routing", Colors.BOLD) + " automatically picks the best provider for each query:")
-    print(color("  • 'iPhone price' → Serper (shopping intent)", Colors.DIM))
-    print(color("  • 'how does TCP work' → Tavily (research intent)", Colors.DIM))  
-    print(color("  • 'companies like Stripe' → Exa (discovery intent)", Colors.DIM))
+    print(color("  • 'weather in Vienna today' → Brave or Serper (generic current web)", Colors.DIM))
+    print(color("  • 'find credible sources for X' → Linkup (source-grounded intent)", Colors.DIM))
+    print(color("  • 'deep research on X' → Exa deep/deep-reasoning or Tavily", Colors.DIM))
     print()
-    
+
     auto_routing = ask_yes_no("Enable auto-routing?", default=True)
     config["auto_routing"]["enabled"] = auto_routing
-    
+
     if not auto_routing:
         print(color(f"  → All queries will use {default_provider}", Colors.DIM))
-    
+
     # ===== Question 5: Result count =====
     print()
     max_results = ask_result_count()
     config["defaults"]["max_results"] = max_results
-    
+
     # Set disabled providers
-    all_providers = ["serper", "tavily", "exa", "you", "searxng"]
+    all_providers = ["serper", "brave", "tavily", "querit", "linkup", "exa", "firecrawl", "perplexity", "you", "searxng"]
     disabled = [p for p in all_providers if p not in enabled_providers]
     config["auto_routing"]["disabled_providers"] = disabled
-    
+
     # ===== Save config =====
     print()
     print(color("─" * 60, Colors.DIM))
     print(color("\n💾 Saving Configuration\n", Colors.BOLD))
-    
+
     with open(config_path, 'w') as f:
         json.dump(config, f, indent=2)
-    
+
     print(color(f"✓ Configuration saved to: {config_path}", Colors.GREEN))
     print()
-    
+
     # ===== Summary =====
     print(color("📋 Configuration Summary:", Colors.BOLD))
     print(f"   Enabled providers: {', '.join(enabled_providers)}")
@@ -415,12 +467,12 @@ def run_setup(skill_dir: Path, force_reset: bool = False):
     print(f"   Auto-routing: {'enabled' if auto_routing else 'disabled'}")
     print(f"   Results per search: {max_results}")
     print()
-    
+
     # ===== Test suggestion =====
     print(color("🚀 Ready to search! Try:", Colors.BOLD))
     print(color(f"   python3 scripts/search.py -q \"your query here\"", Colors.CYAN))
     print()
-    
+
     return True
 
 def check_first_run(skill_dir: Path) -> bool:
@@ -432,10 +484,10 @@ def main():
     # Determine skill directory
     script_path = Path(__file__).resolve()
     skill_dir = script_path.parent.parent
-    
+
     # Check for --reset flag
     force_reset = "--reset" in sys.argv
-    
+
     # Check for --check flag (just check if setup needed)
     if "--check" in sys.argv:
         if check_first_run(skill_dir):
@@ -444,7 +496,7 @@ def main():
         else:
             print("Setup complete: config.json exists")
             sys.exit(0)
-    
+
     # Run setup
     success = run_setup(skill_dir, force_reset)
     sys.exit(0 if success else 1)

@@ -1,5 +1,20 @@
 # Changelog - Web Search Plus
 
+## [3.0.0] - 2026-05-03
+
+### Added
+- Added **Brave**, **Linkup**, and **Firecrawl** as first-class Python search providers, bringing provider parity to 10 search backends.
+- Added `scripts/extract.py` for **URL extraction with automatic fallback** across Firecrawl, Linkup, Tavily, Exa, and You.com.
+- Added targeted unit tests for routing parity, deterministic tie-breaking, extraction URL validation, and extraction fallback behavior.
+
+### Changed
+- Rebased `scripts/search.py` on newer Hermes parity logic while preserving this skill's Docker-aware SearXNG handling and local protections.
+- Updated setup wizard, env template, config example, README, package metadata, and SKILL metadata for the 3.0.0 release.
+- Default provider priority is now `tavily -> linkup -> querit -> exa -> firecrawl -> perplexity -> brave -> serper -> you -> searxng`.
+
+### Notes
+- Search parity is substantially improved with the OpenClaw plugin and Hermes port, but this skill still exposes the extraction flow as a companion script rather than a separate OpenClaw tool wrapper.
+
 ## [2.9.3] - 2026-04-20
 
 ### Added
