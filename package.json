@@ -1,6 +1,6 @@
 {
   "name": "@openclaw/web-search-plus",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Unified multi-provider web search and URL extraction skill with intelligent auto-routing across Serper, Brave, Tavily, Querit, Linkup, Exa, Firecrawl, Perplexity, You.com, and SearXNG.",
   "keywords": [
     "openclaw",
