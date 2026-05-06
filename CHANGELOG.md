@@ -1,5 +1,10 @@
 # Changelog - Web Search Plus
 
+## [3.0.3] - 2026-05-06
+
+### Fixed
+- Version bump (previous version already published)
+
 ## [3.0.2] - 2026-05-06
 
 ### Fixed

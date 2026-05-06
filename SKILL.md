@@ -1,6 +1,6 @@
 ---
 name: web-search-plus
-version: 3.0.2
+version: 3.0.3
 description: Unified multi-provider web search and URL extraction skill with intelligent auto-routing across Serper, Brave, Tavily, Querit, Linkup, Exa, Firecrawl, Perplexity, You.com, and SearXNG.
 tags: [search, web-search, web-extract, serper, brave, tavily, querit, linkup, exa, firecrawl, perplexity, you, searxng, google, multilingual-search, research, semantic-search, auto-routing, multi-provider, shopping, rag, free-tier, privacy, self-hosted, kilo]
 metadata: {"openclaw":{"requires":{"bins":["python3","bash"],"env":{"SERPER_API_KEY":"optional","BRAVE_API_KEY":"optional","TAVILY_API_KEY":"optional","QUERIT_API_KEY":"optional","LINKUP_API_KEY":"optional","EXA_API_KEY":"optional","FIRECRAWL_API_KEY":"optional","PERPLEXITY_API_KEY":"optional — direct Perplexity provider credential","KILOCODE_API_KEY":"optional — alternative Perplexity provider via Kilo Gateway","YOU_API_KEY":"optional","SEARXNG_INSTANCE_URL":"optional"},"note":"Only ONE provider key or SEARXNG_INSTANCE_URL is needed for search. Extraction requires one of Firecrawl, Linkup, Tavily, Exa, or You.com."}}}
