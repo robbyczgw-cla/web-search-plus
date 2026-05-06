@@ -10,9 +10,11 @@ Usage:
 """
 
 import argparse
+import gzip
 import json
 import os
 import sys
+import zlib
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.error import HTTPError, URLError
@@ -42,6 +44,49 @@ def _load_env_file() -> None:
 _load_env_file()
 
 
+def _response_header(response, name: str, default: str = "") -> str:
+    """Get response header safely (works with HTTPError too)."""
+    try:
+        val = response.getheader(name) if hasattr(response, "getheader") else response.headers.get(name)
+        return val or default
+    except Exception:
+        return default
+
+
+def _read_response_body(response) -> bytes:
+    """Read response body with gzip/deflate decompression support."""
+    raw = response.read()
+    encoding = _response_header(response, "Content-Encoding", "").lower().strip()
+
+    if encoding in ("gzip", "x-gzip"):
+        try:
+            return gzip.decompress(raw)
+        except Exception:
+            if raw.startswith(b"\x1f\x8b"):
+                return gzip.decompress(raw)
+            return raw
+    elif encoding == "deflate":
+        try:
+            return zlib.decompress(raw, -zlib.MAX_WBITS)
+        except zlib.error:
+            try:
+                return zlib.decompress(raw)
+            except zlib.error:
+                return raw
+    elif encoding == "br":
+        try:
+            import brotli
+            return brotli.decompress(raw)
+        except ImportError:
+            raise RuntimeError(
+                "Brotli-encoded response received but brotli library not installed. Install with: pip install brotli"
+            )
+        except Exception:
+            raise RuntimeError("Failed to decompress brotli-encoded response")
+
+    return raw
+
+
 def request_json(url: str, init: Dict[str, Any], timeout: int = 30) -> Any:
     body = init.get("body")
     data = body.encode("utf-8") if isinstance(body, str) else body
@@ -50,7 +95,7 @@ def request_json(url: str, init: Dict[str, Any], timeout: int = 30) -> Any:
         req.add_header(key, value)
     try:
         with urlopen(req, timeout=max(1, timeout)) as response:
-            text = response.read().decode("utf-8")
+            text = _read_response_body(response).decode("utf-8")
             return json.loads(text) if text else {}
     except HTTPError as exc:
         payload = exc.read().decode("utf-8", errors="replace") if hasattr(exc, "read") else ""

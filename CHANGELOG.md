@@ -1,5 +1,16 @@
 # Changelog - Web Search Plus
 
+## [3.0.2] - 2026-05-06
+
+### Fixed
+- Fixed gzip/deflate/brotli decompression for HTTP responses across all providers
+  - Added `_response_header()` and `_read_response_body()` helpers with Content-Encoding handling
+  - Fixed 4 vulnerable `response.read().decode()` calls in `search.py` (make_request, make_get_request, search_youcom, search_searxng)
+  - Fixed 1 vulnerable call in `extract.py` (request_json)
+  - Removed forced `Accept-Encoding: gzip` header from Brave search (was causing guaranteed crash)
+  - Added magic-number fallback (`b"\x1f\x8b"`) for mislabeled gzip responses
+  - Brotli-encoded responses raise clear error instead of silent corruption
+
 ## [3.0.1] - 2026-05-03
 
 ### Fixed

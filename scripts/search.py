@@ -22,6 +22,7 @@ Examples:
 """
 
 import argparse
+import gzip
 from http.client import IncompleteRead
 import hashlib
 import json
@@ -29,6 +30,7 @@ import os
 import re
 import sys
 import time
+import zlib
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 from urllib.request import Request, urlopen
@@ -1469,6 +1471,50 @@ class ProviderRequestError(Exception):
         self.transient = transient
 
 
+def _response_header(response, name: str, default: str = "") -> str:
+    """Get response header safely (works with HTTPError too)."""
+    try:
+        val = response.getheader(name) if hasattr(response, "getheader") else response.headers.get(name)
+        return val or default
+    except Exception:
+        return default
+
+
+def _read_response_body(response) -> bytes:
+    """Read response body with gzip/deflate decompression support."""
+    raw = response.read()
+    encoding = _response_header(response, "Content-Encoding", "").lower().strip()
+
+    if encoding in ("gzip", "x-gzip"):
+        try:
+            return gzip.decompress(raw)
+        except Exception:
+            if raw.startswith(b"\x1f\x8b"):
+                return gzip.decompress(raw)
+            return raw
+    elif encoding == "deflate":
+        try:
+            return zlib.decompress(raw, -zlib.MAX_WBITS)
+        except zlib.error:
+            try:
+                return zlib.decompress(raw)
+            except zlib.error:
+                return raw
+    elif encoding == "br":
+        try:
+            import brotli
+            return brotli.decompress(raw)
+        except ImportError:
+            raise ProviderRequestError(
+                "Brotli-encoded response received but brotli library not installed. Install with: pip install brotli",
+                transient=False,
+            )
+        except Exception:
+            raise ProviderRequestError("Failed to decompress brotli-encoded response", transient=True)
+
+    return raw
+
+
 TRANSIENT_HTTP_CODES = {429, 503}
 COOLDOWN_STEPS_SECONDS = [60, 300, 1500, 3600]  # 1m -> 5m -> 25m -> 1h cap
 RETRY_BACKOFF_SECONDS = [1, 3, 9]
@@ -1605,7 +1651,7 @@ def make_request(url: str, headers: dict, body: dict, timeout: int = 30) -> dict
     
     try:
         with urlopen(req, timeout=timeout) as response:
-            return json.loads(response.read().decode("utf-8"))
+            return json.loads(_read_response_body(response).decode("utf-8"))
     except HTTPError as e:
         error_body = e.read().decode("utf-8") if e.fp else str(e)
         try:
@@ -1646,7 +1692,7 @@ def make_get_request(url: str, headers: dict, timeout: int = 30) -> dict:
 
     try:
         with urlopen(req, timeout=timeout) as response:
-            return json.loads(response.read().decode("utf-8"))
+            return json.loads(_read_response_body(response).decode("utf-8"))
     except HTTPError as e:
         error_body = e.read().decode("utf-8") if e.fp else str(e)
         try:
@@ -1801,7 +1847,6 @@ def search_brave(
     headers = {
         "X-Subscription-Token": api_key,
         "Accept": "application/json",
-        "Accept-Encoding": "gzip",
     }
 
     data = make_get_request(url, headers)
@@ -2534,7 +2579,7 @@ def search_you(
     
     try:
         with urlopen(req, timeout=30) as response:
-            data = json.loads(response.read().decode("utf-8"))
+            data = json.loads(_read_response_body(response).decode("utf-8"))
     except HTTPError as e:
         error_body = e.read().decode("utf-8") if e.fp else str(e)
         try:
@@ -2699,7 +2744,7 @@ def search_searxng(
     
     try:
         with urlopen(req, timeout=30) as response:
-            data = json.loads(response.read().decode("utf-8"))
+            data = json.loads(_read_response_body(response).decode("utf-8"))
     except HTTPError as e:
         error_body = e.read().decode("utf-8") if e.fp else str(e)
         try:

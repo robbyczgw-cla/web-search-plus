@@ -1,6 +1,6 @@
 {
   "name": "@openclaw/web-search-plus",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "description": "Unified multi-provider web search and URL extraction skill with intelligent auto-routing across Serper, Brave, Tavily, Querit, Linkup, Exa, Firecrawl, Perplexity, You.com, and SearXNG.",
   "keywords": [
     "openclaw",
@@ -88,8 +88,8 @@
         "LINKUP_API_KEY": "optional",
         "EXA_API_KEY": "optional",
         "FIRECRAWL_API_KEY": "optional",
-        "PERPLEXITY_API_KEY": "optional — direct Perplexity provider credential",
-        "KILOCODE_API_KEY": "optional — alternative Perplexity provider via Kilo Gateway",
+        "PERPLEXITY_API_KEY": "optional \u2014 direct Perplexity provider credential",
+        "KILOCODE_API_KEY": "optional \u2014 alternative Perplexity provider via Kilo Gateway",
         "YOU_API_KEY": "optional",
         "SEARXNG_INSTANCE_URL": "optional"
       }
