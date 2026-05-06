@@ -48,7 +48,15 @@
   "bugs": {
     "url": "https://github.com/robbyczgw-cla/web-search-plus/issues"
   },
-  "openclaw": {
+  "files": [
+    "SKILL.md",
+    "README.md",
+    "scripts/",
+    ".env.example",
+    "config.example.json",
+    "CHANGELOG.md"
+  ],
+  "clawhub": {
     "skill": true,
     "triggers": [
       "search",
@@ -82,13 +90,5 @@
         "SEARXNG_INSTANCE_URL": "optional"
       }
     }
-  },
-  "files": [
-    "SKILL.md",
-    "README.md",
-    "scripts/",
-    ".env.example",
-    "config.example.json",
-    "CHANGELOG.md"
-  ]
+  }
 }
