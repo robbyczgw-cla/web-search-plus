@@ -2,9 +2,9 @@
 
 Unified multi-provider web search and URL extraction for OpenClaw-style agent workflows.
 
-Current version: **3.0.0**
+Current version: **3.0.3**
 
-## What changed in 3.0.0
+## What changed in 3.0.x
 
 - Add **Brave**, **Linkup**, and **Firecrawl** search providers to the Python skill
 - Add **URL extraction** via `scripts/extract.py` with auto fallback across Firecrawl, Linkup, Tavily, Exa, and You.com
