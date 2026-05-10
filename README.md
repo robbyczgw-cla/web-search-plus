@@ -1,5 +1,9 @@
 # Web Search Plus
 
+<p align="center">
+  <img src="docs/assets/web-search-plus-logo.png" alt="web search plus logo" width="180">
+</p>
+
 Unified multi-provider web search and URL extraction for OpenClaw-style agent workflows.
 
 Current version: **3.0.3**
