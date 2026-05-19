@@ -1,5 +1,10 @@
 # Changelog - Web Search Plus
 
+## Unreleased
+
+### Removed
+- Removed the stale standalone homepage HTML from the OpenClaw Skill repository; `websearchplus.xyz` is maintained in the dedicated `websearchplus-xyz` homepage repository.
+
 ## [3.0.3] - 2026-05-06
 
 ### Fixed
