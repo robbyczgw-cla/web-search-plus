@@ -9,7 +9,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Web Search Plus">
 <meta property="og:title" content="Web Search Plus — Intelligent Multi-Provider Search for AI Agents">
-<meta property="og:description" content="Smart provider routing, 10 search providers, 5 extract providers, quality reports, and research mode for OpenClaw, Hermes Agent, and MCP clients.">
+<meta property="og:description" content="Smart provider routing, 13 search providers, 6 extract providers, quality reports, and research mode for OpenClaw, Hermes Agent, and MCP clients.">
 <meta property="og:url" content="https://websearchplus.xyz/">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Web Search Plus — Intelligent Multi-Provider Search for AI Agents">
@@ -431,13 +431,13 @@ footer {
 <!-- HERO -->
 <section class="hero">
   <div class="container">
-    <div class="hero-eyebrow"><span class="line"></span> 10 providers · 1 unified API</div>
+    <div class="hero-eyebrow"><span class="line"></span> 13 providers · 1 unified API</div>
     <h1>Web Search<br><span class="thin">Plus</span></h1>
     <p class="hero-sub">Intelligent multi-provider search routing for AI agents. Available as an OpenClaw Skill, native OpenClaw Plugin, MCP server, and Hermes integration.</p>
     <div class="hero-actions">
-      <a href="https://github.com/robbyczgw-cla/hermes-web-search-plus" class="btn btn-accent" target="_blank">Get Hermes v1.7.1 →</a>
+      <a href="https://github.com/robbyczgw-cla/hermes-web-search-plus" class="btn btn-accent" target="_blank">Get Hermes v2.1.0 →</a>
       <a href="https://www.clawhub.ai/robbyczgw-cla/web-search-plus" class="btn btn-ghost" target="_blank">OpenClaw Skill v3.0.3 →</a>
-      <a href="https://pypi.org/project/web-search-plus-mcp/0.2.1/" class="btn btn-ghost" target="_blank">MCP v0.2.1 →</a>
+      <a href="https://github.com/robbyczgw-cla/web-search-plus-mcp" class="btn btn-ghost" target="_blank">MCP v0.9.0 →</a>
     </div>
     <div class="providers-row">
       <span class="label">Routes to</span>
@@ -450,6 +450,9 @@ footer {
       <span class="provider-tag"><span class="dot" style="background:#f97316"></span> Firecrawl</span>
       <span class="provider-tag"><span class="dot" style="background:#38bdf8"></span> Perplexity</span>
       <span class="provider-tag"><span class="dot" style="background:#ef4444"></span> You.com</span>
+      <span class="provider-tag"><span class="dot" style="background:#14b8a6"></span> SerpBase</span>
+      <span class="provider-tag"><span class="dot" style="background:#0ea5e9"></span> Kilo Perplexity</span>
+      <span class="provider-tag"><span class="dot" style="background:#6366f1"></span> Parallel</span>
       <span class="provider-tag"><span class="dot" style="background:#22c55e"></span> SearXNG</span>
     </div>
   </div>
@@ -519,7 +522,7 @@ footer {
   <div class="container centered">
     <div class="fade-up">
       <div class="section-label">Providers</div>
-      <h2>Ten search engines, one interface</h2>
+      <h2>Thirteen search engines, one interface</h2>
       <p class="section-desc">Each provider excels at different query types. Web Search Plus knows which one to call.</p>
     </div>
     <div class="table-wrap fade-up">
@@ -574,6 +577,21 @@ footer {
             <td><code class="api-key">YOU_API_KEY</code></td>
           </tr>
           <tr>
+            <td><span class="dot" style="background:#14b8a6;display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:8px;vertical-align:middle"></span>SerpBase</td>
+            <td class="best-for">Explicit Google SERP API fallback</td>
+            <td><code class="api-key">SERPBASE_API_KEY</code></td>
+          </tr>
+          <tr>
+            <td><span class="dot" style="background:#0ea5e9;display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:8px;vertical-align:middle"></span>Kilo Perplexity</td>
+            <td class="best-for">Explicit Perplexity via Kilo gateway</td>
+            <td><code class="api-key">KILOCODE_API_KEY</code></td>
+          </tr>
+          <tr>
+            <td><span class="dot" style="background:#6366f1;display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:8px;vertical-align:middle"></span>Parallel</td>
+            <td class="best-for">Explicit high-quality web search and extraction</td>
+            <td><code class="api-key">PARALLEL_API_KEY</code></td>
+          </tr>
+          <tr>
             <td><span class="dot" style="background:#22c55e;display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:8px;vertical-align:middle"></span>SearXNG</td>
             <td class="best-for">Privacy-first, self-hosted, no API key</td>
             <td><code class="api-key">SEARXNG_INSTANCE_URL</code></td>
@@ -597,9 +615,9 @@ footer {
       <div class="product-card flagship-product">
         <div class="product-header">
           <div class="product-title">Hermes Agent</div>
-          <span class="product-badge badge-cyan">v1.7.1</span>
+          <span class="product-badge badge-cyan">v2.1.0</span>
         </div>
-        <p class="product-desc">Python port of web-search-plus for Hermes Agent. Multi-provider search across 10 providers with intelligent auto-routing, quality reports, opt-in research mode, and budget-limited URL extraction. Same routing logic — native Hermes integration.</p>
+        <p class="product-desc">Python port of web-search-plus for Hermes Agent. Multi-provider search across 13 providers with intelligent auto-routing, quality reports, opt-in research mode, and budget-limited URL extraction. Same routing logic — native Hermes integration.</p>
         <div class="product-install">
           <code>hermes plugins install robbyczgw-cla/hermes-web-search-plus --enable</code>
           <button class="copy-btn" onclick="copyText('hermes plugins install robbyczgw-cla/hermes-web-search-plus --enable', this)">Copy</button>
@@ -623,16 +641,16 @@ footer {
       <div class="product-card">
         <div class="product-header">
           <div class="product-title">MCP Server</div>
-          <span class="product-badge badge-cyan">PyPI v0.2.1</span>
+          <span class="product-badge badge-cyan">GitHub v0.9.0</span>
         </div>
-        <p class="product-desc">Standalone Python MCP server synced with the Web Search Plus v1.7 engine. Exposes <code style="color:var(--accent);font-family:var(--mono);font-size:0.85em">web_search</code> and <code style="color:var(--accent);font-family:var(--mono);font-size:0.85em">web_extract</code>, 10 search providers, 5 extract providers, quality reports, and opt-in research mode. Works with Claude Desktop, Cursor, NanoBot, and any MCP-compatible client.</p>
+        <p class="product-desc">Standalone Python MCP server synced with the Web Search Plus v2.1 engine. Exposes <code style="color:var(--accent);font-family:var(--mono);font-size:0.85em">web_search</code> and <code style="color:var(--accent);font-family:var(--mono);font-size:0.85em">web_extract</code>, 13 search providers, 6 extract providers, quality reports, and opt-in research mode. Works with Claude Desktop, Cursor, NanoBot, and any MCP-compatible client.</p>
         <div class="product-install">
-          <code>uvx web-search-plus-mcp</code>
-          <button class="copy-btn" onclick="copyText('uvx web-search-plus-mcp', this)">Copy</button>
+          <code>uvx --from git+https://github.com/robbyczgw-cla/web-search-plus-mcp web-search-plus-mcp</code>
+          <button class="copy-btn" onclick="copyText('uvx --from git+https://github.com/robbyczgw-cla/web-search-plus-mcp web-search-plus-mcp', this)">Copy</button>
         </div>
-        <a href="https://pypi.org/project/web-search-plus-mcp/0.2.1/" class="product-link" target="_blank">PyPI →</a>
+        <a href="https://github.com/robbyczgw-cla/web-search-plus-mcp" class="product-link" target="_blank">Repo →</a>
         <a href="https://github.com/robbyczgw-cla/web-search-plus-mcp" class="product-link" target="_blank" style="margin-top:4px;opacity:0.7;font-size:0.85em">GitHub →</a>
-        <a href="https://github.com/robbyczgw-cla/web-search-plus-mcp/releases/tag/v0.2.1" class="product-link" target="_blank" style="margin-top:4px;opacity:0.7;font-size:0.85em">Release v0.2.1 →</a>
+        <a href="https://github.com/robbyczgw-cla/web-search-plus-mcp" class="product-link" target="_blank" style="margin-top:4px;opacity:0.7;font-size:0.85em">Main v0.9.0 →</a>
         <a href="https://github.com/robbyczgw-cla/web-search-plus-mcp/blob/main/CHANGELOG.md" class="product-link" target="_blank" style="margin-top:4px;opacity:0.7;font-size:0.85em">Changelog →</a>
       </div>
       <!-- OpenClaw Plugin -->
@@ -716,6 +734,7 @@ BRAVE_API_KEY=***
 TAVILY_API_KEY=***
 EXA_API_KEY=***
 LINKUP_API_KEY=***
+PARALLEL_API_KEY=***  <span class="cmt"># optional explicit Parallel search/extract</span>
 
 <span class="cmt"># 3) Restart/reload so plugin tools register</span>
 # CLI: exit and start `hermes` again, or use /reset
@@ -732,7 +751,7 @@ python3 search.py --query "Hermes Agent latest release" --provider auto --qualit
   <span class="key">"mcpServers"</span>: {
     <span class="key">"web-search-plus"</span>: {
       <span class="key">"command"</span>: <span class="str">"uvx"</span>,
-      <span class="key">"args"</span>: [<span class="str">"--from"</span>, <span class="str">"web-search-plus-mcp==0.2.1"</span>, <span class="str">"web-search-plus-mcp"</span>],
+      <span class="key">"args"</span>: [<span class="str">"--from"</span>, <span class="str">"git+https://github.com/robbyczgw-cla/web-search-plus-mcp"</span>, <span class="str">"web-search-plus-mcp"</span>],
       <span class="key">"env"</span>: {
         <span class="key">"SERPER_API_KEY"</span>: <span class="str">"your-key"</span>,
         <span class="key">"TAVILY_API_KEY"</span>: <span class="str">"your-key"</span>,
@@ -740,7 +759,8 @@ python3 search.py --query "Hermes Agent latest release" --provider auto --qualit
         <span class="key">"BRAVE_API_KEY"</span>: <span class="str">"your-key"</span>,
         <span class="key">"LINKUP_API_KEY"</span>: <span class="str">"your-key"</span>,
         <span class="key">"QUERIT_API_KEY"</span>: <span class="str">"your-key"</span>,
-        <span class="key">"PERPLEXITY_API_KEY"</span>: <span class="str">"your-key"</span>
+        <span class="key">"PERPLEXITY_API_KEY"</span>: <span class="str">"your-key"</span>,
+        <span class="key">"PARALLEL_API_KEY"</span>: <span class="str">"your-key"</span>
       }
     }
   }
@@ -753,13 +773,14 @@ python3 search.py --query "Hermes Agent latest release" --provider auto --qualit
   <span class="key">"mcpServers"</span>: {
     <span class="key">"web-search-plus"</span>: {
       <span class="key">"command"</span>: <span class="str">"uvx"</span>,
-      <span class="key">"args"</span>: [<span class="str">"--from"</span>, <span class="str">"web-search-plus-mcp==0.2.1"</span>, <span class="str">"web-search-plus-mcp"</span>],
+      <span class="key">"args"</span>: [<span class="str">"--from"</span>, <span class="str">"git+https://github.com/robbyczgw-cla/web-search-plus-mcp"</span>, <span class="str">"web-search-plus-mcp"</span>],
       <span class="key">"env"</span>: {
         <span class="key">"SERPER_API_KEY"</span>: <span class="str">"your-key"</span>,
         <span class="key">"TAVILY_API_KEY"</span>: <span class="str">"your-key"</span>,
         <span class="key">"EXA_API_KEY"</span>: <span class="str">"your-key"</span>,
         <span class="key">"BRAVE_API_KEY"</span>: <span class="str">"your-key"</span>,
-        <span class="key">"LINKUP_API_KEY"</span>: <span class="str">"your-key"</span>
+        <span class="key">"LINKUP_API_KEY"</span>: <span class="str">"your-key"</span>,
+        <span class="key">"PARALLEL_API_KEY"</span>: <span class="str">"your-key"</span>
       }
     }
   }
@@ -773,13 +794,14 @@ python3 search.py --query "Hermes Agent latest release" --provider auto --qualit
     <span class="key">"mcpServers"</span>: {
       <span class="key">"web-search-plus"</span>: {
         <span class="key">"command"</span>: <span class="str">"uvx"</span>,
-        <span class="key">"args"</span>: [<span class="str">"--from"</span>, <span class="str">"web-search-plus-mcp==0.2.1"</span>, <span class="str">"web-search-plus-mcp"</span>],
+        <span class="key">"args"</span>: [<span class="str">"--from"</span>, <span class="str">"git+https://github.com/robbyczgw-cla/web-search-plus-mcp"</span>, <span class="str">"web-search-plus-mcp"</span>],
         <span class="key">"env"</span>: {
           <span class="key">"SERPER_API_KEY"</span>: <span class="str">"your-key"</span>,
           <span class="key">"TAVILY_API_KEY"</span>: <span class="str">"your-key"</span>,
           <span class="key">"EXA_API_KEY"</span>: <span class="str">"your-key"</span>,
           <span class="key">"BRAVE_API_KEY"</span>: <span class="str">"your-key"</span>,
-          <span class="key">"LINKUP_API_KEY"</span>: <span class="str">"your-key"</span>
+          <span class="key">"LINKUP_API_KEY"</span>: <span class="str">"your-key"</span>,
+          <span class="key">"PARALLEL_API_KEY"</span>: <span class="str">"your-key"</span>
         }
       }
     }
@@ -801,10 +823,17 @@ python3 search.py --query "Hermes Agent latest release" --provider auto --qualit
     <div style="max-width:640px;margin:48px auto 0;text-align:left">
       <div class="fade-up" style="border-left:2px solid var(--accent);padding:16px 0 16px 24px;margin-bottom:24px">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-          <span style="font-family:var(--mono);font-size:0.78rem;color:var(--accent);font-weight:600">MCP v0.2.1</span>
-          <span style="font-family:var(--mono);font-size:0.72rem;color:var(--text-dim)">May 3, 2026</span>
+          <span style="font-family:var(--mono);font-size:0.78rem;color:var(--accent);font-weight:600">Parallel provider sync</span>
+          <span style="font-family:var(--mono);font-size:0.72rem;color:var(--text-dim)">May 19, 2026</span>
         </div>
-        <p style="font-size:0.9rem;color:var(--text-secondary);line-height:1.6">Standalone MCP package published to PyPI with Web Search Plus v1.7 engine parity: web_search, new web_extract, 10 search providers, 5 extract providers, quality reports, research mode, GitHub release assets, and uvx smoke-tested install.</p>
+        <p style="font-size:0.9rem;color:var(--text-secondary);line-height:1.6">Hermes v2.1.0 and MCP v0.9.0 now include Parallel as a guarded explicit search and extraction provider, bringing the ecosystem to 13 search providers and 6 extraction providers.</p>
+      </div>
+      <div class="fade-up" style="border-left:2px solid var(--accent);padding:16px 0 16px 24px;margin-bottom:24px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <span style="font-family:var(--mono);font-size:0.78rem;color:var(--accent);font-weight:600">MCP v0.8.0</span>
+          <span style="font-family:var(--mono);font-size:0.72rem;color:var(--text-dim)">May 16, 2026</span>
+        </div>
+        <p style="font-size:0.9rem;color:var(--text-secondary);line-height:1.6">Latest PyPI release before the Parallel mainline merge: Routing v2, 12 search providers, 5 extract providers, quality reports, research mode, and uvx smoke-tested install.</p>
       </div>
       <div class="fade-up" style="border-left:2px solid var(--accent);padding:16px 0 16px 24px;margin-bottom:24px">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
@@ -881,7 +910,7 @@ python3 search.py --query "Hermes Agent latest release" --provider auto --qualit
       <a href="https://pypi.org/project/web-search-plus-mcp/" target="_blank">PyPI</a>
       <a href="https://www.clawhub.ai/robbyczgw-cla/web-search-plus" target="_blank">ClawHub Skill</a>
       <a href="https://clawhub.ai/plugins/web-search-plus-plugin-v2" target="_blank">ClawHub Plugin</a>
-      <a href="https://github.com/robbyczgw-cla/hermes-web-search-plus/releases/tag/v1.7.1" target="_blank">Hermes v1.7.1</a>
+      <a href="https://github.com/robbyczgw-cla/hermes-web-search-plus/releases/tag/v2.1.0" target="_blank">Hermes v2.1.0</a>
       <a href="https://openclaw.ai" target="_blank">OpenClaw</a>
     </div>
   </div>
