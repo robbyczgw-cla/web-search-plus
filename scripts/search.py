@@ -290,6 +290,8 @@ DEFAULT_CONFIG = {
         "enabled": True,
         "fallback_provider": "serper",
         "provider_priority": ["tavily", "linkup", "querit", "exa", "firecrawl", "perplexity", "brave", "serper", "you", "searxng"],
+        # Note: "serpbase" is intentionally NOT in default auto-routing priority — it is explicit/fallback-only.
+        # Use --provider serpbase OR add it to provider_priority in config.json to opt-in.
         "disabled_providers": [],
         "confidence_threshold": 0.3,  # Below this, note low confidence
     },
@@ -343,6 +345,10 @@ DEFAULT_CONFIG = {
         "safesearch": 0,  # 0=off, 1=moderate, 2=strict
         "engines": None,  # Optional list of engines to use
         "language": "en"
+    },
+    "serpbase": {
+        "api_url": "https://api.serpbase.com/search",
+        "timeout": 30,
     }
 }
 
@@ -401,6 +407,7 @@ def get_api_key(provider: str, config: Dict[str, Any] = None) -> Optional[str]:
         "exa": "EXA_API_KEY",
         "you": "YOU_API_KEY",
         "firecrawl": "FIRECRAWL_API_KEY",
+        "serpbase": "SERPBASE_API_KEY",
     }
     return os.environ.get(key_map.get(provider, ""))
 
@@ -529,9 +536,10 @@ def validate_api_key(provider: str, config: Dict[str, Any] = None) -> str:
             "exa": "EXA_API_KEY",
             "you": "YOU_API_KEY",
             "perplexity": "KILOCODE_API_KEY",
-            "firecrawl": "FIRECRAWL_API_KEY"
+            "firecrawl": "FIRECRAWL_API_KEY",
+            "serpbase": "SERPBASE_API_KEY",
         }[provider]
-        
+
         urls = {
             "serper": "https://serper.dev",
             "brave": "https://brave.com/search/api/",
@@ -541,7 +549,8 @@ def validate_api_key(provider: str, config: Dict[str, Any] = None) -> str:
             "exa": "https://exa.ai",
             "you": "https://api.you.com",
             "perplexity": "https://api.kilo.ai",
-            "firecrawl": "https://www.firecrawl.dev/app/api-keys"
+            "firecrawl": "https://www.firecrawl.dev/app/api-keys",
+            "serpbase": "https://serpbase.dev",
         }
         
         error_msg = {
@@ -2815,6 +2824,127 @@ def search_searxng(
 
 
 # =============================================================================
+# SerpBase (Google Search via Prepaid Credits)
+# =============================================================================
+
+def search_serpbase(
+    query: str,
+    api_key: str,
+    max_results: int = 5,
+    time_range: Optional[str] = None,
+    api_url: str = "https://api.serpbase.com/search",
+    timeout: int = 30,
+) -> dict:
+    """Search using SerpBase (low-cost Google Search API with prepaid credits).
+
+    SerpBase excels at:
+    - Low-cost Google SERP access (prepaid credits, no monthly plan)
+    - Structured JSON responses
+    - Google Search + News + Images + Videos + Maps surfaces
+    - Explicit/fallback-only by design — opt-in via --provider serpbase OR
+      add to provider_priority in config.json
+
+    Args:
+        query: Search query
+        api_key: SerpBase API key
+        max_results: Maximum results to return (default 5)
+        time_range: Filter by recency: hour, day, week, month, year
+        api_url: SerpBase API endpoint (default https://api.serpbase.com/search)
+        timeout: Request timeout in seconds (default 30)
+    """
+    params = {
+        "api_key": api_key,
+        "q": query,
+        "num": str(max_results),
+    }
+    if time_range and time_range != "none":
+        params["time_range"] = time_range
+
+    query_string = urlencode(params)
+    url = f"{api_url}?{query_string}"
+
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": "WebSearchPlus-Skill/3.1.0",
+    }
+
+    req = Request(url, headers=headers, method="GET")
+
+    try:
+        with urlopen(req, timeout=timeout) as response:
+            data = json.loads(_read_response_body(response).decode("utf-8"))
+    except HTTPError as e:
+        error_body = e.read().decode("utf-8") if e.fp else str(e)
+        try:
+            error_json = json.loads(error_body)
+            error_detail = error_json.get("error") or error_json.get("message") or error_body
+        except json.JSONDecodeError:
+            error_detail = error_body[:500]
+        # SerpBase signals quota/business errors via 402/429; treat as transient
+        # for retry, hard errors (4xx auth) as non-transient.
+        transient_codes = TRANSIENT_HTTP_CODES | {402, 429}
+        raise ProviderRequestError(
+            f"SerpBase error: {error_detail} (HTTP {e.code})",
+            status_code=e.code,
+            transient=e.code in transient_codes,
+        )
+    except URLError as e:
+        reason = str(getattr(e, "reason", e))
+        is_timeout = "timed out" in reason.lower()
+        raise ProviderRequestError(f"Cannot reach SerpBase. Error: {reason}", transient=is_timeout)
+    except TimeoutError:
+        raise ProviderRequestError("SerpBase request timed out", transient=True)
+
+    # SerpBase business-error path: top-level status field
+    if data.get("status") is not None:
+        try:
+            status_value = int(data.get("status"))
+        except (TypeError, ValueError):
+            status_value = None
+        if status_value is not None and status_value != 0:
+            msg = data.get("error") or data.get("message") or f"SerpBase request failed with status={status_value}"
+            raise ProviderRequestError(str(msg), transient=False)
+
+    # SerpBase result shape mirrors SerpAPI conventions: organic_results / organic / results
+    organic = data.get("organic_results") or data.get("organic") or data.get("results") or []
+    results = []
+    for i, item in enumerate(organic[:max_results]):
+        results.append({
+            "title": item.get("title", ""),
+            "url": item.get("link") or item.get("url", ""),
+            "snippet": item.get("snippet") or item.get("description", ""),
+            "score": round(1.0 - i * 0.05, 3),
+            "position": item.get("position"),
+        })
+
+    answer = (
+        (data.get("answer_box") or {}).get("answer")
+        or (data.get("knowledge_graph") or {}).get("description")
+        or (results[0]["snippet"] if results else "")
+    )
+
+    related = []
+    for r in (data.get("related_searches") or []):
+        if isinstance(r, str):
+            related.append(r)
+        elif isinstance(r, dict) and r.get("query"):
+            related.append(r["query"])
+
+    return {
+        "provider": "serpbase",
+        "query": query,
+        "results": results,
+        "images": [],
+        "answer": answer,
+        "knowledge_graph": data.get("knowledge_graph"),
+        "related_searches": related,
+        "metadata": {
+            "session_id": data.get("session_id"),
+        },
+    }
+
+
+# =============================================================================
 # CLI
 # =============================================================================
 
@@ -2856,7 +2986,7 @@ Full docs: See README.md and SKILL.md
     # Common arguments
     parser.add_argument(
         "--provider", "-p", 
-        choices=["serper", "brave", "tavily", "linkup", "querit", "exa", "firecrawl", "perplexity", "you", "searxng", "auto"],
+        choices=["serper", "brave", "tavily", "linkup", "querit", "exa", "firecrawl", "perplexity", "you", "searxng", "serpbase", "auto"],
         help="Search provider (auto=intelligent routing)"
     )
     parser.add_argument(
@@ -3285,6 +3415,16 @@ Full docs: See README.md and SKILL.md
                 language=args.language,
                 time_range=args.time_range,
                 safesearch=args.searxng_safesearch,
+            )
+        elif prov == "serpbase":
+            serpbase_config = config.get("serpbase", {})
+            return search_serpbase(
+                query=args.query,
+                api_key=key,
+                max_results=args.max_results,
+                time_range=args.time_range or args.freshness,
+                api_url=serpbase_config.get("api_url", "https://api.serpbase.com/search"),
+                timeout=int(serpbase_config.get("timeout", 30)),
             )
         else:
             raise ValueError(f"Unknown provider: {prov}")

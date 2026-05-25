@@ -1,5 +1,15 @@
 # Changelog - Web Search Plus
 
+## [3.1.0] - 2026-05-25
+
+### Added
+- **SerpBase provider integration** (closes [#4](https://github.com/robbyczgw-cla/web-search-plus/issues/4)) — low-cost Google SERP API with prepaid credits. Brings the skill to parity with `web-search-plus-plugin` v3.0.0.
+  - New `search_serpbase()` function in `scripts/search.py` (Python port of plugin's canonical `searchSerpBase()` impl)
+  - Explicit/fallback-only by design — NOT in default `provider_priority`. Opt-in via `--provider serpbase` OR append to `auto_routing.provider_priority` in `config.json`
+  - New env var `SERPBASE_API_KEY` (https://serpbase.dev)
+  - Treats HTTP 402/429 as transient (quota/rate-limit retry); business-error status fields surface as `ProviderRequestError`
+  - SKILL.md + README + `.env.example` + `config.example.json` updated; package version bumped 3.0.3 → 3.1.0
+
 ## Unreleased
 
 ### Removed

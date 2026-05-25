@@ -1,7 +1,7 @@
 {
   "name": "web-search-plus",
-  "version": "3.0.3",
-  "description": "Unified multi-provider web search and URL extraction skill with intelligent auto-routing across Serper, Brave, Tavily, Querit, Linkup, Exa, Firecrawl, Perplexity, You.com, and SearXNG.",
+  "version": "3.1.0",
+  "description": "Unified multi-provider web search and URL extraction skill with intelligent auto-routing across Serper, Brave, Tavily, Querit, Linkup, Exa, Firecrawl, Perplexity, You.com, SearXNG, and SerpBase.",
   "keywords": [
     "openclaw",
     "skill",
@@ -15,6 +15,7 @@
     "firecrawl",
     "you",
     "you.com",
+    "serpbase",
     "google-search",
     "research",
     "semantic-search",

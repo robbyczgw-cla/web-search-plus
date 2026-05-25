@@ -6,7 +6,13 @@
 
 Unified multi-provider web search and URL extraction for OpenClaw-style agent workflows.
 
-Current version: **3.0.3**
+Current version: **3.1.0**
+
+## What changed in 3.1.0
+
+- Add **SerpBase** as the 11th search provider — low-cost Google SERP API with prepaid credits (https://serpbase.dev)
+- Explicit/fallback-only by design: NOT in default auto-routing priority. Use `--provider serpbase` or opt-in via `config.json`.
+- Closes [#4](https://github.com/robbyczgw-cla/web-search-plus/issues/4); brings skill to parity with `web-search-plus-plugin` v3.0.0
 
 ## What changed in 3.0.x
 
@@ -27,6 +33,7 @@ Current version: **3.0.3**
 - **Perplexity via Kilo** — answer-first web results
 - **You.com** — current-web / RAG-ish queries
 - **SearXNG** — privacy-first self-hosted metasearch
+- **SerpBase** — low-cost Google SERP, prepaid credits, **explicit/fallback-only**
 
 ## Extraction providers
 
@@ -70,6 +77,8 @@ python3 scripts/search.py -q "latest AI policy updates in Germany"
 
 python3 scripts/search.py -p exa --exa-depth deep -q "LLM scaling laws research"
 python3 scripts/search.py -p firecrawl -q "YC startups web scraping"
+python3 scripts/search.py -p serpbase -q "best laptop 2026"
+# explicit SerpBase call — not used by auto-routing unless added to provider_priority
 ```
 
 ## Extraction examples

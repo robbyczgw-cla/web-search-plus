@@ -1,16 +1,16 @@
 ---
 name: web-search-plus
-version: 3.0.3
-description: Unified multi-provider web search and URL extraction skill with intelligent auto-routing across Serper, Brave, Tavily, Querit, Linkup, Exa, Firecrawl, Perplexity, You.com, and SearXNG.
-tags: [search, web-search, web-extract, serper, brave, tavily, querit, linkup, exa, firecrawl, perplexity, you, searxng, google, multilingual-search, research, semantic-search, auto-routing, multi-provider, shopping, rag, free-tier, privacy, self-hosted, kilo]
-metadata: {"openclaw":{"requires":{"bins":["python3","bash"],"env":{"SERPER_API_KEY":"optional","BRAVE_API_KEY":"optional","TAVILY_API_KEY":"optional","QUERIT_API_KEY":"optional","LINKUP_API_KEY":"optional","EXA_API_KEY":"optional","FIRECRAWL_API_KEY":"optional","PERPLEXITY_API_KEY":"optional — direct Perplexity provider credential","KILOCODE_API_KEY":"optional — alternative Perplexity provider via Kilo Gateway","YOU_API_KEY":"optional","SEARXNG_INSTANCE_URL":"optional"},"note":"Only ONE provider key or SEARXNG_INSTANCE_URL is needed for search. Extraction requires one of Firecrawl, Linkup, Tavily, Exa, or You.com."}}}
+version: 3.1.0
+description: Unified multi-provider web search and URL extraction skill with intelligent auto-routing across Serper, Brave, Tavily, Querit, Linkup, Exa, Firecrawl, Perplexity, You.com, SearXNG, and SerpBase.
+tags: [search, web-search, web-extract, serper, brave, tavily, querit, linkup, exa, firecrawl, perplexity, you, searxng, serpbase, google, multilingual-search, research, semantic-search, auto-routing, multi-provider, shopping, rag, free-tier, privacy, self-hosted, kilo]
+metadata: {"openclaw":{"requires":{"bins":["python3","bash"],"env":{"SERPER_API_KEY":"optional","BRAVE_API_KEY":"optional","TAVILY_API_KEY":"optional","QUERIT_API_KEY":"optional","LINKUP_API_KEY":"optional","EXA_API_KEY":"optional","FIRECRAWL_API_KEY":"optional","PERPLEXITY_API_KEY":"optional — direct Perplexity provider credential","KILOCODE_API_KEY":"optional — alternative Perplexity provider via Kilo Gateway","YOU_API_KEY":"optional","SEARXNG_INSTANCE_URL":"optional","SERPBASE_API_KEY":"optional — explicit/fallback-only Google SERP provider with prepaid credits"},"note":"Only ONE provider key or SEARXNG_INSTANCE_URL is needed for search. Extraction requires one of Firecrawl, Linkup, Tavily, Exa, or You.com."}}}
 ---
 
 # Web Search Plus
 
 **Stop choosing search providers. Let the skill do it for you.**
 
-This skill now connects you to **10 search providers** and adds a companion extraction flow for pulling content from URLs. Broad web query? → Brave or Serper. Research question? → Tavily or Exa. Need citations and grounding? → Linkup. Want scrape-ready content? → Firecrawl. Prefer privacy? → SearXNG.
+This skill now connects you to **11 search providers** and adds a companion extraction flow for pulling content from URLs. Broad web query? → Brave or Serper. Research question? → Tavily or Exa. Need citations and grounding? → Linkup. Want scrape-ready content? → Firecrawl. Prefer privacy? → SearXNG. Need low-cost Google SERP with prepaid credits? → SerpBase (explicit/fallback-only).
 
 ---
 
@@ -18,7 +18,7 @@ This skill now connects you to **10 search providers** and adds a companion extr
 
 - **Just search** — no need to think about which provider to use
 - **Smart routing** — query analysis picks the best provider automatically
-- **10 providers, 1 interface** — general web, research, semantic discovery, direct answers, privacy-first, and extraction-capable providers together
+- **11 providers, 1 interface** — general web, research, semantic discovery, direct answers, privacy-first, prepaid-credits, and extraction-capable providers together
 - **URL extraction included** — pull markdown/HTML content with fallback across five providers
 - **Works with just 1 credential** — start with any single provider, add more later
 - **Free/self-hosted options available** — SearXNG can run at $0 API cost
@@ -55,6 +55,7 @@ The wizard explains providers, collects keys, and sets defaults.
 - **Perplexity** — direct answers with citations; via `PERPLEXITY_API_KEY` or `KILOCODE_API_KEY`
 - **You.com** — current-web / RAG-friendly snippets; also supports extraction
 - **SearXNG** — private/self-hosted search; no API key, just instance URL
+- **SerpBase** — low-cost Google SERP with prepaid credits; explicit/fallback-only (opt-in via `--provider serpbase` or add to `provider_priority` in `config.json`)
 
 ### Extraction providers
 
@@ -70,7 +71,7 @@ The wizard explains providers, collects keys, and sets defaults.
 
 ## 🧠 Routing at a Glance
 
-Default priority:
+Default priority (SerpBase excluded by design — opt-in only):
 
 ```text
 tavily → linkup → querit → exa → firecrawl → perplexity → brave → serper → you → searxng
@@ -90,6 +91,7 @@ python3 scripts/search.py -q "latest AI policy updates in Germany"
 
 python3 scripts/search.py -p exa --exa-depth deep -q "LLM scaling laws research"
 python3 scripts/search.py -p firecrawl -q "YC startups web scraping"
+python3 scripts/search.py -p serpbase -q "best laptop 2026"   # explicit SerpBase
 ```
 
 Debug routing:
@@ -117,6 +119,7 @@ python3 scripts/extract.py --url https://example.com --format html --include-raw
 - `config.example.json` includes provider priority and provider-specific defaults
 - `config.json` is your local runtime config
 - SearXNG still supports explicit URL config and docker-aware auto-detection
+- SerpBase is **explicit/fallback-only** by default; to include in auto-routing, append `"serpbase"` to `auto_routing.provider_priority` in `config.json`
 
 ---
 
