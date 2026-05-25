@@ -341,11 +341,12 @@ def run_setup(skill_dir: Path, force_reset: bool = False):
             "firecrawl": {},
             "perplexity": {},
             "you": {},
-            "searxng": {}
+            "searxng": {},
+            "serpbase": {}
         }
 
     # Remove any existing API keys from example
-    for provider in ["serper", "brave", "tavily", "querit", "linkup", "exa", "firecrawl", "perplexity", "you"]:
+    for provider in ["serper", "brave", "tavily", "querit", "linkup", "exa", "firecrawl", "perplexity", "you", "serpbase"]:
         if provider in config:
             config[provider].pop("api_key", None)
 
@@ -368,7 +369,8 @@ def run_setup(skill_dir: Path, force_reset: bool = False):
         "firecrawl": ("Firecrawl", "https://www.firecrawl.dev/app/api-keys", "Search with scrape-ready metadata"),
         "perplexity": ("Perplexity via Kilo", "https://kilo.ai", "Direct answers with citations"),
         "you": ("You.com", "https://api.you.com", "RAG applications, real-time info"),
-        "searxng": ("SearXNG", "https://docs.searxng.org/admin/installation.html", "Privacy-first, self-hosted, $0 cost")
+        "searxng": ("SearXNG", "https://docs.searxng.org/admin/installation.html", "Privacy-first, self-hosted, $0 cost"),
+        "serpbase": ("SerpBase", "https://serpbase.dev", "Low-cost Google SERP, prepaid credits (explicit/fallback-only)")
     }
 
     for provider, (name, url, desc) in providers_info.items():
@@ -444,8 +446,8 @@ def run_setup(skill_dir: Path, force_reset: bool = False):
     max_results = ask_result_count()
     config["defaults"]["max_results"] = max_results
 
-    # Set disabled providers
-    all_providers = ["serper", "brave", "tavily", "querit", "linkup", "exa", "firecrawl", "perplexity", "you", "searxng"]
+    # Set disabled providers (serpbase is excluded from default auto-routing — opt-in only)
+    all_providers = ["serper", "brave", "tavily", "querit", "linkup", "exa", "firecrawl", "perplexity", "you", "searxng", "serpbase"]
     disabled = [p for p in all_providers if p not in enabled_providers]
     config["auto_routing"]["disabled_providers"] = disabled
 
