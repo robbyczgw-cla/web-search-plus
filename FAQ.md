@@ -187,17 +187,37 @@ Yes, when the provider supports it:
 python3 scripts/extract.py --url https://example.com --format html --include-raw-html
 ```
 
+## Data handling & privacy
+
+### Where do my queries and URLs go?
+
+**Every search query is transmitted to the third-party provider that serves it** — Serper, Brave, Tavily, Linkup, Querit, Exa, Firecrawl, SerpBase, Perplexity (via the Kilo gateway), You.com, or your SearXNG instance. **Every extraction URL is forwarded to the chosen extraction provider** (Firecrawl, Linkup, Tavily, Exa, You.com), whose servers fetch the page. Each provider's own privacy policy and data retention apply.
+
+### How do I keep sensitive queries under control?
+
+- Use explicit provider selection (`--provider <name>`) instead of auto-routing so you decide which third party receives the query.
+- Use a self-hosted SearXNG instance to keep queries on infrastructure you control.
+- Don't submit internal/private URLs for extraction — they are sent to external services. The skill blocks private/loopback/link-local targets and cloud metadata endpoints by default anyway.
+
+### What is stored locally?
+
+Queries, results, and provider failure history are persisted under the cache directory: result cache entries (which include the raw query text) and `provider_health.json` (provider error messages and cooldown state). The directory is created with mode `0700` and files with `0600`. Disable with `WSP_DISABLE_CACHE=1`, bypass per call with `--no-cache`, wipe with `--clear-cache`.
+
+### Are API keys ever logged or cached?
+
+No. Keys are read from `config.json`/`.env`/environment, used for requests, and never written to the cache, the health file, or logs. Provider error messages are sanitized.
+
 ## Caching
 
 ### How does caching work?
 
-Search results are cached locally by query, provider, result count, and relevant params.
+Search results are cached locally by query, provider, result count, and relevant params. **Note: cache entries include the raw query text and results on disk** — see "Data handling & privacy" above.
 
 Default TTL: 3600 seconds.
 
 ### Where are cached results stored?
 
-In `.cache/` inside the skill folder by default.
+In `.cache/` inside the skill folder by default (created mode `0700`; files `0600`). Provider failure history is stored alongside in `.cache/provider_health.json`.
 
 Override with:
 
@@ -212,11 +232,30 @@ python3 scripts/search.py --cache-stats
 python3 scripts/search.py --clear-cache
 ```
 
-### How do I skip cache?
+### How do I skip or disable cache?
 
 ```bash
-python3 scripts/search.py -q "query" --no-cache
+python3 scripts/search.py -q "query" --no-cache   # one call
+export WSP_DISABLE_CACHE=1                        # disable globally
 ```
+
+## Research mode & quality reports
+
+### What does `--mode research` do?
+
+It queries up to three configured providers **concurrently**, deduplicates results with deterministic ordering (submission order, regardless of which provider finishes first), then extracts the top URLs for grounding. `--research-time-budget` (default 55s) gates which providers launch and whether extraction runs; skipped steps are reported as diagnostics instead of failing.
+
+```bash
+python3 scripts/search.py --mode research -q "your question" --research-providers tavily linkup exa
+```
+
+### What is `--quality-report`?
+
+It attaches transparent diagnostics to the output: providers considered, domain diversity, duplicate/thin-snippet counts, extract recommendations, and **authority signals** for canonical-source query classes (`canonical_domain_hits`, `demoted_domain_hits`, `canonical_top_result`).
+
+### What is intent reranking?
+
+For query classes where source authority beats snippet luck (official vendor releases, official docs, policy PDFs, finance/IR, security advisories), results are reranked so primary sources rank above mirror/aggregator domains. `metadata.intent_rerank` shows when ordering changed.
 
 ## SearXNG
 
@@ -239,10 +278,10 @@ Blocked by default for safety. Only set `SEARXNG_ALLOW_PRIVATE=1` when you inten
 Yes, with normal API caveats:
 
 - automatic fallback
-- rate-limit handling
-- provider cooldowns
-- local cache
-- SSRF protections for SearXNG
+- rate-limit handling with jittered retry backoff
+- provider cooldowns (locked, atomic health-file writes)
+- local cache (owner-only permissions, disable-able)
+- SSRF protections for SearXNG and all user-supplied URLs (extraction, `--similar-url`)
 - configurable provider priority
 
 For native OpenClaw tool usage, prefer the plugin. For script-based skill workflows, this skill is ready once tests pass.

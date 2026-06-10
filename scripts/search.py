@@ -27,8 +27,11 @@ from http.client import IncompleteRead
 import hashlib
 import json
 import os
+import random
 import re
 import sys
+import tempfile
+import threading
 import time
 import zlib
 from pathlib import Path
@@ -42,6 +45,35 @@ try:
 except ImportError:
     docker_detect = None
 
+try:
+    from . import provider_registry
+    from .quality import (  # noqa: F401 - re-exported for backward-compatible imports
+        CANONICAL_DOMAIN_RULES,
+        _choose_tie_winner,
+        build_authority_signals,
+        build_quality_report,
+        deduplicate_results_across_providers,
+        normalize_result_url,
+        rerank_results_for_intent,
+        select_research_providers,
+    )
+    from .research import run_research_mode
+    from .url_security import validate_outbound_url
+except ImportError:
+    import provider_registry
+    from quality import (  # noqa: F401
+        CANONICAL_DOMAIN_RULES,
+        _choose_tie_winner,
+        build_authority_signals,
+        build_quality_report,
+        deduplicate_results_across_providers,
+        normalize_result_url,
+        rerank_results_for_intent,
+        select_research_providers,
+    )
+    from research import run_research_mode
+    from url_security import validate_outbound_url
+
 
 # =============================================================================
 # Result Caching
@@ -50,6 +82,12 @@ except ImportError:
 CACHE_DIR = Path(os.environ.get("WSP_CACHE_DIR", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".cache")))
 PROVIDER_HEALTH_FILE = CACHE_DIR / "provider_health.json"
 DEFAULT_CACHE_TTL = 3600  # 1 hour in seconds
+DISABLE_CACHE_ENV = "WSP_DISABLE_CACHE"
+
+
+def cache_disabled_by_env() -> bool:
+    """True when result caching is disabled via WSP_DISABLE_CACHE=1."""
+    return os.environ.get(DISABLE_CACHE_ENV, "").strip() == "1"
 
 
 def _build_cache_payload(query: str, provider: str, max_results: int, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -77,8 +115,30 @@ def _get_cache_path(cache_key: str) -> Path:
 
 
 def _ensure_cache_dir() -> None:
-    """Create cache directory if it doesn't exist."""
+    """Create cache directory if it doesn't exist (owner-only access)."""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(CACHE_DIR, 0o700)
+    except OSError:
+        pass
+
+
+def _atomic_write_json(path: Path, data: Dict[str, Any]) -> None:
+    """Write JSON via temp file + atomic replace; files are created mode 0600."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=str(path.parent))
+    try:
+        # mkstemp creates the file 0600; keep it that way through the rename.
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+        os.replace(tmp_name, path)
+    except Exception:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
 
 
 def cache_get(query: str, provider: str, max_results: int, ttl: int = DEFAULT_CACHE_TTL, params: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
@@ -142,8 +202,7 @@ def cache_put(query: str, provider: str, max_results: int, result: Dict[str, Any
     cached_result["_cache_params"] = params or {}
     
     try:
-        with open(cache_path, "w", encoding="utf-8") as f:
-            json.dump(cached_result, f, ensure_ascii=False, indent=2)
+        _atomic_write_json(cache_path, cached_result)
     except IOError as e:
         # Non-fatal: log to stderr but don't fail
         print(json.dumps({"cache_write_error": str(e)}), file=sys.stderr)
@@ -395,21 +454,16 @@ def get_api_key(provider: str, config: Dict[str, Any] = None) -> Optional[str]:
             if key:
                 return key
     
-    # Then check environment
-    if provider == "perplexity":
-        return os.environ.get("PERPLEXITY_API_KEY") or os.environ.get("KILOCODE_API_KEY")
-    key_map = {
-        "serper": "SERPER_API_KEY",
-        "brave": "BRAVE_API_KEY",
-        "tavily": "TAVILY_API_KEY",
-        "querit": "QUERIT_API_KEY",
-        "linkup": "LINKUP_API_KEY",
-        "exa": "EXA_API_KEY",
-        "you": "YOU_API_KEY",
-        "firecrawl": "FIRECRAWL_API_KEY",
-        "serpbase": "SERPBASE_API_KEY",
-    }
-    return os.environ.get(key_map.get(provider, ""))
+    # Then check environment (ProviderSpec registry is the single source of truth
+    # for env var names; perplexity also accepts its Kilo gateway alternative)
+    spec = provider_registry.PROVIDER_SPECS.get(provider)
+    if not spec:
+        return None
+    for env_var in (spec.env_var,) + spec.alt_env_vars:
+        value = os.environ.get(env_var)
+        if value:
+            return value
+    return None
 
 
 def _validate_searxng_url(url: str) -> str:
@@ -484,9 +538,14 @@ def get_searxng_instance_url(config: Dict[str, Any] = None) -> Optional[str]:
     if env_url:
         return _validate_searxng_url(env_url)
 
-    # Finally auto-detect local defaults when available
+    # Finally auto-detect local defaults when available. Unlike explicit
+    # config/env (where a blocked URL should fail loudly), an auto-detected
+    # URL that fails validation just means SearXNG is not usable here.
     if docker_detect:
-        return _validate_searxng_url(docker_detect.get_searxng_url())
+        try:
+            return _validate_searxng_url(docker_detect.get_searxng_url())
+        except ValueError:
+            return None
     return None
 
 
@@ -527,37 +586,13 @@ def validate_api_key(provider: str, config: Dict[str, Any] = None) -> str:
         return key
     
     if not key:
-        env_var = {
-            "serper": "SERPER_API_KEY",
-            "brave": "BRAVE_API_KEY",
-            "tavily": "TAVILY_API_KEY",
-            "querit": "QUERIT_API_KEY",
-            "linkup": "LINKUP_API_KEY",
-            "exa": "EXA_API_KEY",
-            "you": "YOU_API_KEY",
-            "perplexity": "KILOCODE_API_KEY",
-            "firecrawl": "FIRECRAWL_API_KEY",
-            "serpbase": "SERPBASE_API_KEY",
-        }[provider]
-
-        urls = {
-            "serper": "https://serper.dev",
-            "brave": "https://brave.com/search/api/",
-            "tavily": "https://tavily.com",
-            "querit": "https://querit.ai",
-            "linkup": "https://app.linkup.so",
-            "exa": "https://exa.ai",
-            "you": "https://api.you.com",
-            "perplexity": "https://api.kilo.ai",
-            "firecrawl": "https://www.firecrawl.dev/app/api-keys",
-            "serpbase": "https://serpbase.dev",
-        }
-        
+        spec = provider_registry.PROVIDER_SPECS[provider]
+        env_var = spec.env_var
         error_msg = {
             "error": f"Missing API key for {provider}",
             "env_var": env_var,
             "how_to_fix": [
-                f"1. Get your API key from {urls[provider]}",
+                f"1. Get your API key from {spec.signup_url}",
                 f"2. Add to config.json: \"{provider}\": {{\"api_key\": \"your-key\"}}",
                 f"3. Or set environment variable: export {env_var}=\"your-key\"",
             ],
@@ -1176,9 +1211,28 @@ class QueryAnalyzer:
         for pattern, weight in recency_patterns:
             if re.search(pattern, query, re.IGNORECASE):
                 total += weight
-        
+
         return total > 2.0, total
-    
+
+    def _detect_routing_class(self, query: str) -> str:
+        """Coarse canonical-source class labels (subset of hermes Routing v2).
+
+        Only classes with CANONICAL_DOMAIN_RULES entries matter here: they feed
+        the authority reranker and quality-report authority signals.
+        """
+        q = query.lower()
+        if re.search(r'\b(advisory|security advisory|cve|mitigation|vulnerability|zero[-\s]?day)\b', q):
+            return "security_advisory"
+        if re.search(r'\b(pdf|whitepaper|code of practice)\b', q) and re.search(r'\b(nist|eu ai act|regulation|regulatory|policy|commission|government|official|rmf)\b', q):
+            return "policy_pdf"
+        if re.search(r'\b(earnings|gross margin|investor relations|guidance|10-[qk]|eps|quarterly results?|sec filings?)\b', q):
+            return "finance_earnings_official"
+        if re.search(r'\b(official docs?|official documentation|api reference|developer docs?|official manual)\b', q):
+            return "official_docs"
+        if re.search(r'\b(official|release|announcement|launch|changelog|release notes?)\b', q) and re.search(r'\b(mistral|anthropic|openai|google|meta|nvidia|apple|microsoft|claude|gemini|llama)\b', q):
+            return "official_vendor_release"
+        return "general"
+
     def analyze(self, query: str) -> Dict[str, Any]:
         """
         Perform comprehensive query analysis.
@@ -1397,6 +1451,7 @@ class QueryAnalyzer:
                 "is_complex": analysis["complexity"]["is_complex"],
                 "has_url": analysis["detected_url"] is not None,
                 "recency_focused": analysis["recency_focused"],
+                "routing_class": self._detect_routing_class(query),
             }
         }
 
@@ -1527,10 +1582,29 @@ def _read_response_body(response) -> bytes:
 TRANSIENT_HTTP_CODES = {429, 503}
 COOLDOWN_STEPS_SECONDS = [60, 300, 1500, 3600]  # 1m -> 5m -> 25m -> 1h cap
 RETRY_BACKOFF_SECONDS = [1, 3, 9]
+# Add up to this fraction of the base delay as random jitter so concurrent or
+# repeated retries against a recovering provider do not synchronize into bursts.
+RETRY_JITTER_FRACTION = 0.5
+
+# Serializes read-modify-write of the shared health file when providers run
+# concurrently in-process (e.g. research mode). Atomic writes already prevent
+# torn reads; this prevents lost updates between threads.
+_HEALTH_LOCK = threading.Lock()
+
+
+def _retry_delay(attempt: int) -> float:
+    """Return the backoff delay (seconds) for a retry attempt, with jitter."""
+    base = RETRY_BACKOFF_SECONDS[min(attempt, len(RETRY_BACKOFF_SECONDS) - 1)]
+    return base + random.uniform(0.0, base * RETRY_JITTER_FRACTION)
 
 
 def _ensure_parent(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    if path.parent == CACHE_DIR:
+        try:
+            os.chmod(CACHE_DIR, 0o700)
+        except OSError:
+            pass
 
 
 def _load_provider_health() -> Dict[str, Any]:
@@ -1546,8 +1620,7 @@ def _load_provider_health() -> Dict[str, Any]:
 
 def _save_provider_health(state: Dict[str, Any]) -> None:
     _ensure_parent(PROVIDER_HEALTH_FILE)
-    with open(PROVIDER_HEALTH_FILE, "w", encoding="utf-8") as f:
-        json.dump(state, f, ensure_ascii=False, indent=2)
+    _atomic_write_json(PROVIDER_HEALTH_FILE, state)
 
 
 def provider_in_cooldown(provider: str) -> Tuple[bool, int]:
@@ -1559,27 +1632,30 @@ def provider_in_cooldown(provider: str) -> Tuple[bool, int]:
 
 
 def mark_provider_failure(provider: str, error_message: str) -> Dict[str, Any]:
-    state = _load_provider_health()
-    now = int(time.time())
-    pstate = state.get(provider, {})
-    fail_count = int(pstate.get("failure_count", 0)) + 1
-    cooldown_seconds = COOLDOWN_STEPS_SECONDS[min(fail_count - 1, len(COOLDOWN_STEPS_SECONDS) - 1)]
-    state[provider] = {
-        "failure_count": fail_count,
-        "cooldown_until": now + cooldown_seconds,
-        "cooldown_seconds": cooldown_seconds,
-        "last_error": error_message,
-        "last_failure_at": now,
-    }
-    _save_provider_health(state)
-    return state[provider]
+    with _HEALTH_LOCK:
+        state = _load_provider_health()
+        now = int(time.time())
+        pstate = state.get(provider, {})
+        fail_count = int(pstate.get("failure_count", 0)) + 1
+        cooldown_seconds = COOLDOWN_STEPS_SECONDS[min(fail_count - 1, len(COOLDOWN_STEPS_SECONDS) - 1)]
+        state[provider] = {
+            "failure_count": fail_count,
+            "cooldown_until": now + cooldown_seconds,
+            "cooldown_seconds": cooldown_seconds,
+            # Never persist credentials, even if a provider echoes one back.
+            "last_error": provider_registry.redact_secrets(error_message),
+            "last_failure_at": now,
+        }
+        _save_provider_health(state)
+        return state[provider]
 
 
 def reset_provider_health(provider: str) -> None:
-    state = _load_provider_health()
-    if provider in state:
-        state.pop(provider, None)
-        _save_provider_health(state)
+    with _HEALTH_LOCK:
+        state = _load_provider_health()
+        if provider in state:
+            state.pop(provider, None)
+            _save_provider_health(state)
 
 
 def _title_from_url(url: str) -> str:
@@ -1600,50 +1676,8 @@ def _title_from_url(url: str) -> str:
         return url[:60]
 
 
-def normalize_result_url(url: str) -> str:
-    if not url:
-        return ""
-    parsed = urlparse(url.strip())
-    netloc = (parsed.netloc or "").lower()
-    if netloc.startswith("www."):
-        netloc = netloc[4:]
-    path = parsed.path.rstrip("/")
-    return f"{netloc}{path}"
-
-
-def deduplicate_results_across_providers(results_by_provider: List[Tuple[str, Dict[str, Any]]], max_results: int) -> Tuple[List[Dict[str, Any]], int]:
-    deduped = []
-    seen = set()
-    dedup_count = 0
-    for provider_name, data in results_by_provider:
-        for item in data.get("results", []):
-            norm = normalize_result_url(item.get("url", ""))
-            if norm and norm in seen:
-                dedup_count += 1
-                continue
-            if norm:
-                seen.add(norm)
-            item = item.copy()
-            item.setdefault("provider", provider_name)
-            deduped.append(item)
-            if len(deduped) >= max_results:
-                return deduped, dedup_count
-    return deduped, dedup_count
-
-def _choose_tie_winner(query: str, winners: List[str], priority: List[str]) -> str:
-    """Break score ties deterministically per query.
-
-    Uses a stable hash of the query to distribute ties across providers while
-    keeping the same query reproducible across runs.
-    """
-    ordered_winners = [p for p in priority if p in winners]
-    if not ordered_winners:
-        ordered_winners = sorted(winners)
-    if len(ordered_winners) == 1:
-        return ordered_winners[0]
-    digest = hashlib.sha256(f"{query}|{'|'.join(ordered_winners)}".encode("utf-8")).hexdigest()
-    idx = int(digest[:8], 16) % len(ordered_winners)
-    return ordered_winners[idx]
+# normalize_result_url, deduplicate_results_across_providers, and
+# _choose_tie_winner now live in scripts/quality.py (imported above).
 
 
 # =============================================================================
@@ -2865,7 +2899,7 @@ def search_serpbase(
 
     headers = {
         "Accept": "application/json",
-        "User-Agent": "WebSearchPlus-Skill/3.1.0",
+        "User-Agent": "WebSearchPlus-Skill/3.2.0",
     }
 
     req = Request(url, headers=headers, method="GET")
@@ -2985,8 +3019,8 @@ Full docs: See README.md and SKILL.md
     
     # Common arguments
     parser.add_argument(
-        "--provider", "-p", 
-        choices=["serper", "brave", "tavily", "linkup", "querit", "exa", "firecrawl", "perplexity", "you", "searxng", "serpbase", "auto"],
+        "--provider", "-p",
+        choices=list(provider_registry.SEARCH_PROVIDER_IDS) + ["auto"],
         help="Search provider (auto=intelligent routing)"
     )
     parser.add_argument(
@@ -3173,10 +3207,47 @@ Full docs: See README.md and SKILL.md
     # Domain filters
     parser.add_argument("--include-domains", nargs="+")
     parser.add_argument("--exclude-domains", nargs="+")
-    
+
     # Output
     parser.add_argument("--compact", action="store_true")
-    
+    parser.add_argument(
+        "--quality-report",
+        action="store_true",
+        help="Attach transparent routing/result diagnostics (incl. authority signals) to the JSON output"
+    )
+
+    # Research mode
+    parser.add_argument(
+        "--mode",
+        default="normal",
+        choices=["normal", "research"],
+        help="Search mode: normal single-provider route or research multi-provider + extraction"
+    )
+    parser.add_argument(
+        "--research-providers",
+        nargs="+",
+        help="Explicit provider list for --mode research"
+    )
+    parser.add_argument(
+        "--research-extract-count",
+        type=int,
+        default=3,
+        help="Number of top research-mode URLs to extract for grounding"
+    )
+    parser.add_argument(
+        "--research-time-budget",
+        type=float,
+        default=55.0,
+        help="Best-effort wall-clock budget for research mode; skips remaining providers/extraction between calls when exhausted"
+    )
+
+    # Security
+    parser.add_argument(
+        "--allow-private-urls",
+        action="store_true",
+        help="Allow user-supplied URLs (e.g. --similar-url) that resolve to private/internal networks (off by default; see WSP_ALLOW_PRIVATE_URLS)"
+    )
+
     # Caching options
     parser.add_argument(
         "--cache-ttl",
@@ -3187,7 +3258,7 @@ Full docs: See README.md and SKILL.md
     parser.add_argument(
         "--no-cache",
         action="store_true",
-        help="Bypass cache (always fetch fresh results)"
+        help="Bypass the local result cache (always fetch fresh results). Set WSP_DISABLE_CACHE=1 to disable caching globally."
     )
     parser.add_argument(
         "--clear-cache",
@@ -3217,7 +3288,19 @@ Full docs: See README.md and SKILL.md
     
     if not args.query and not args.similar_url:
         parser.error("--query is required (unless using --similar-url with Exa)")
-    
+
+    # SSRF guard: --similar-url is user-supplied and forwarded to a provider
+    if args.similar_url:
+        try:
+            args.similar_url = validate_outbound_url(
+                args.similar_url, allow_private=args.allow_private_urls, label="--similar-url"
+            )
+        except ValueError as e:
+            print(json.dumps({"error": str(e)}), file=sys.stderr)
+            sys.exit(1)
+
+    no_cache = args.no_cache or cache_disabled_by_env()
+
     # Handle --explain-routing
     if args.explain_routing:
         if not args.query:
@@ -3240,6 +3323,8 @@ Full docs: See README.md and SKILL.md
                 "reason": routing["reason"],
                 "top_signals": routing["top_signals"],
                 "scores": routing["scores"],
+                "exa_depth": routing.get("exa_depth", "normal"),
+                "analysis_summary": routing.get("analysis_summary", {}),
             }
         else:
             provider = "exa"
@@ -3441,13 +3526,83 @@ Full docs: See README.md and SKILL.md
                 if not e.transient:
                     break
                 if attempt < 2:
-                    time.sleep(RETRY_BACKOFF_SECONDS[attempt])
+                    time.sleep(_retry_delay(attempt))
                     continue
                 break
             except Exception as e:
                 last_error = e
                 break
         raise last_error if last_error else Exception("Unknown provider execution error")
+
+    providers_considered = providers_to_try.copy()
+
+    # Research mode: query a compact provider set concurrently, deduplicate,
+    # then extract top sources for grounding (best-effort, time-budgeted).
+    if args.mode == "research":
+        try:
+            from . import extract as extract_module
+        except ImportError:
+            import extract as extract_module
+
+        available_research_providers = {
+            p for p in providers_to_try
+            if p not in disabled_providers and get_api_key(p, config) and not provider_in_cooldown(p)[0]
+        }
+        if provider and get_api_key(provider, config) and not provider_in_cooldown(provider)[0]:
+            available_research_providers.add(provider)
+        if args.research_providers:
+            research_providers = [
+                p for p in args.research_providers
+                if p not in disabled_providers and get_api_key(p, config) and not provider_in_cooldown(p)[0]
+            ]
+        else:
+            research_providers = select_research_providers(
+                primary_provider=provider,
+                provider_priority=provider_priority,
+                available_providers=available_research_providers,
+                max_providers=3,
+            )
+
+        if not research_providers:
+            error_result = {
+                "error": "No configured providers available for research mode",
+                "provider": provider,
+                "query": args.query,
+                "routing": routing_info,
+                "cooldown_skips": cooldown_skips,
+            }
+            print(json.dumps(error_result, indent=2), file=sys.stderr)
+            sys.exit(1)
+
+        result = run_research_mode(
+            query=args.query,
+            research_providers=research_providers,
+            execute_search=execute_with_retry,
+            extract_urls=lambda urls: extract_module.extract_plus(
+                urls=urls,
+                provider="auto",
+                output_format="markdown",
+                allow_private=args.allow_private_urls,
+            ),
+            max_results=args.max_results,
+            max_extract_urls=args.research_extract_count,
+            time_budget_seconds=args.research_time_budget,
+        )
+        routing_info["mode"] = "research"
+        routing_info["provider"] = "research"
+        result["routing"].update(routing_info)
+        result["quality_report"] = build_quality_report(
+            query=args.query,
+            result=result,
+            routing_info=routing_info,
+            providers_considered=providers_considered,
+            eligible_providers=research_providers,
+            cooldown_skips=cooldown_skips,
+            errors=result.get("routing", {}).get("provider_errors", []),
+        )
+        indent = None if args.compact else 2
+        print(json.dumps(result, indent=indent, ensure_ascii=False))
+        return
 
     cache_context = {
         "locale": f"{args.country}:{args.language}",
@@ -3464,12 +3619,14 @@ Full docs: See README.md and SKILL.md
         "exa_verbosity": args.exa_verbosity,
         "category": args.category,
         "similar_url": args.similar_url,
+        "mode": args.mode,
+        "quality_report": args.quality_report,
     }
 
-    # Check cache first (unless --no-cache is set)
+    # Check cache first (unless --no-cache / WSP_DISABLE_CACHE is set)
     cached_result = None
     cache_hit = False
-    if not args.no_cache and args.query:
+    if not no_cache and args.query:
         cached_result = cache_get(
             query=args.query,
             provider=provider,
@@ -3506,7 +3663,14 @@ Full docs: See README.md and SKILL.md
             if not errors:
                 break
         except Exception as e:
-            error_msg = str(e)
+            # Redact env- and config-sourced credentials before the message hits
+            # stderr, the errors list, or the persisted provider-health file.
+            config_secrets = tuple(
+                section.get(field)
+                for section in config.values() if isinstance(section, dict)
+                for field in ("api_key", "apiKey") if isinstance(section.get(field), str)
+            )
+            error_msg = provider_registry.redact_secrets(str(e), config_secrets)
             cooldown_info = mark_provider_failure(current_provider, error_msg)
             errors.append({
                 "provider": current_provider,
@@ -3547,9 +3711,18 @@ Full docs: See README.md and SKILL.md
         if cooldown_skips:
             routing_info["cooldown_skips"] = cooldown_skips
 
+        # Canonical-source intent reranking: for routing classes where source
+        # authority beats snippet luck, boost primary sources and demote mirrors.
+        routing_class = routing_info.get("analysis_summary", {}).get("routing_class", "general")
+        if not cache_hit and isinstance(result.get("results"), list):
+            reranked, rerank_metadata = rerank_results_for_intent(args.query or "", routing_class, result.get("results", []))
+            result["results"] = reranked
+            if rerank_metadata.get("reranked"):
+                result.setdefault("metadata", {})["intent_rerank"] = rerank_metadata
+
         result["routing"] = routing_info
 
-        if not cache_hit and not args.no_cache and args.query:
+        if not cache_hit and not no_cache and args.query:
             cache_put(
                 query=args.query,
                 provider=successful_provider or provider,
@@ -3563,6 +3736,17 @@ Full docs: See README.md and SKILL.md
             result["deduplicated"] = False
             result.setdefault("metadata", {})
             result["metadata"].setdefault("dedup_count", 0)
+
+        if args.quality_report:
+            result["quality_report"] = build_quality_report(
+                query=args.query,
+                result=result,
+                routing_info=routing_info,
+                providers_considered=providers_considered,
+                eligible_providers=eligible_providers,
+                cooldown_skips=cooldown_skips,
+                errors=errors,
+            )
 
         indent = None if args.compact else 2
         print(json.dumps(result, indent=indent, ensure_ascii=False))

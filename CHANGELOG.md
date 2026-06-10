@@ -1,5 +1,41 @@
 # Changelog - Web Search Plus
 
+## [3.2.0] - 2026-06-10
+
+Feature sync with `hermes-web-search-plus` v2.3.0/v2.4.0 plus security fixes for the SkillSpector scan findings.
+
+### Added
+- **Research mode** (`--mode research`, port of hermes v2.4.0): queries up to three providers **concurrently** (wall-clock cost ≈ slowest provider instead of the sum), deduplicates across providers with deterministic ordering (preserved by submission order regardless of completion order), then extracts the top sources for grounding via `scripts/extract.py`. New flags: `--research-providers`, `--research-extract-count` (default 3), `--research-time-budget` (default 55s — gates which providers launch and whether extraction runs; exhausted steps surface as diagnostics instead of failures).
+- **Canonical-source intent reranking** (port of hermes v2.3.0): `rerank_results_for_intent()` + `CANONICAL_DOMAIN_RULES` boost primary sources and demote mirror/aggregator domains for the routing classes `official_vendor_release`, `official_docs`, `policy_pdf`, `finance_earnings_official`, and `security_advisory` (detected via a new compact `QueryAnalyzer._detect_routing_class()`). Reordered results are flagged in `metadata.intent_rerank`.
+- **Quality reports** (`--quality-report`): transparent routing/result diagnostics including `authority_signals` (`canonical_domain_hits`, `demoted_domain_hits`, `canonical_top_result`). Research mode always attaches a quality report.
+- **ProviderSpec registry** (`scripts/provider_registry.py`, port of hermes v2.3.0): single source of truth for provider metadata (env vars, API hosts, capabilities, signup URLs). `search.py` key resolution/validation, `extract.py` credentials, and CLI provider choices now read from it.
+- New modules `scripts/quality.py` and `scripts/research.py`; `scripts/search.py` re-exports the shared helpers (`normalize_result_url`, `deduplicate_results_across_providers`, `_choose_tie_winner`, …) so existing imports keep working.
+
+### Security (SkillSpector findings)
+- **Vague triggers (HIGH)**: replaced the generic manifest triggers (`search`, `find`, `look up`, `research`) with narrowly scoped phrases (`web search plus`, `wsp search`, `search the web for`, `multi-provider web search`, `extract url content`, `extract content from url`). Remaining triggers documented in SKILL.md.
+- **Undisclosed third-party transmission (MEDIUM)**: added prominent "Data handling & privacy" sections to SKILL.md, README, and FAQ stating that search queries and extraction URLs are sent to the configured third-party providers, with guidance to use explicit provider selection for sensitive work and avoid submitting internal/private URLs.
+- **Silent local caching (MEDIUM)**: caching of queries/results/provider failure history under `WSP_CACHE_DIR` (`.cache` default, including `provider_health.json`) is now disclosed in all docs; cache directory is created mode `0700` and cache/health files are written mode `0600` via atomic temp-file replace; added `WSP_DISABLE_CACHE=1` global toggle (the existing `--no-cache` / `--clear-cache` / `--cache-stats` flags are now documented prominently).
+- **SSRF / tainted URL flow (MEDIUM)**: new `scripts/url_security.py` guard (mirrors the SearXNG SSRF guard) validates all user-supplied URLs before extraction or forwarding (`scripts/extract.py` URLs and `--similar-url`): http/https only, hostname resolution with private/loopback/link-local/reserved ranges blocked (10/8, 127/8, 169.254/16, 172.16/12, 192.168/16, ::1, fc00::/7, fe80::/10, 0.0.0.0), and cloud metadata endpoints (169.254.169.254, metadata.google.internal) always blocked. Explicit opt-out for trusted private networks via `--allow-private-urls` or `WSP_ALLOW_PRIVATE_URLS=1` (off by default).
+- **Missing permission declarations (MEDIUM)**: `package.json → clawhub.permissions` and the SKILL.md metadata now declare outbound network access (listed provider API hosts only), environment reads (`*_API_KEY`, `SEARXNG_*`, `WSP_*`), and filesystem writes (cache directory only).
+- **Description-behavior mismatch (LOW)**: skill descriptions in `package.json` and SKILL.md now mention local caching and provider-health persistence.
+- **Credential redaction (defense in depth)**: provider error messages are scrubbed of any configured credential values (env- and config.json-sourced) before they reach stderr, fallback error lists, extraction error fields, or the persisted `provider_health.json` — even if a provider echoes a key back in an error body, it never leaves memory.
+
+### Improved
+- Retry backoff now adds bounded random jitter (`RETRY_JITTER_FRACTION = 0.5`) so concurrent or repeated retries against a recovering provider do not synchronize into bursts (port of hermes v2.4.0).
+- Provider-health read-modify-write is guarded by a lock and written atomically, so concurrent in-process provider calls (research mode) cannot lose cooldown updates or tear the file (port of hermes v2.4.0).
+
+### Fixed
+- Auto-routing's suggested Exa depth (`deep`/`deep-reasoning`) is now actually propagated into the provider call: `routing_info` previously never carried `exa_depth` (or `analysis_summary`), so the auto-upgrade path was dead code.
+- In Docker environments without a configured SearXNG instance, the auto-detected local URL no longer raises an unhandled `ValueError` out of `get_api_key()` when it fails SSRF validation — SearXNG is treated as unconfigured instead.
+
+### Tests
+- New `tests/test_security.py`: trigger-scope checks, manifest permission declarations, SSRF validation (scheme rejection, private IP literals, metadata endpoints with opt-in still blocked, mocked private/public DNS resolution, extract-level blocking), cache dir/file permissions (0700/0600), cache roundtrip, and `--no-cache` / `WSP_DISABLE_CACHE` behavior through `main()`.
+- New `tests/test_research_and_quality.py`: research-mode merge/dedup/extraction, out-of-order completion ordering, time-budget gating, extraction-failure resilience, provider selection, quality reports, authority signals, canonical reranking, routing-class detection, retry-jitter bounds, registry consistency, and an end-to-end rerank + quality-report pipeline regression test.
+
+### Compatibility
+- Fully backward compatible CLI: all existing flags, defaults, output fields, and the `scripts.search` import surface are unchanged; new behavior is opt-in (`--mode research`, `--quality-report`) except for (a) intent reranking, which can reorder results for the five canonical-source query classes, (b) the SSRF guard, which now rejects private/metadata extraction targets unless explicitly allowed, and (c) stricter cache file permissions.
+- Skill manifest triggers are intentionally narrower; invoke the skill with the scoped phrases documented in SKILL.md.
+
 ## [3.1.0] - 2026-05-25
 
 ### Added
