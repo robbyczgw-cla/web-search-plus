@@ -20,6 +20,13 @@ from typing import Any, Dict, List, Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+try:
+    from .url_security import validate_outbound_url
+    from .provider_registry import redact_secrets
+except ImportError:
+    from url_security import validate_outbound_url
+    from provider_registry import redact_secrets
+
 EXTRACT_PROVIDER_PRIORITY = ["firecrawl", "linkup", "tavily", "exa", "you"]
 
 
@@ -151,14 +158,11 @@ def normalize_result(provider: str, url: str, title: str = "", content: str = ""
 
 
 def get_extract_api_key(provider: str) -> Optional[str]:
-    env_map = {
-        "firecrawl": "FIRECRAWL_API_KEY",
-        "linkup": "LINKUP_API_KEY",
-        "tavily": "TAVILY_API_KEY",
-        "exa": "EXA_API_KEY",
-        "you": "YOU_API_KEY",
-    }
-    return os.environ.get(env_map[provider])
+    try:
+        from .provider_registry import PROVIDER_SPECS
+    except ImportError:
+        from provider_registry import PROVIDER_SPECS
+    return os.environ.get(PROVIDER_SPECS[provider].env_var)
 
 
 def extract_firecrawl(urls: List[str], api_key: str, output_format: str = "markdown", include_images: bool = False, include_raw_html: bool = False, render_js: bool = False, api_url: str = "https://api.firecrawl.dev/v2/scrape", timeout: int = 60) -> Dict[str, Any]:
@@ -295,7 +299,7 @@ def extract_you(urls: List[str], api_key: str, output_format: str = "markdown", 
     return {"provider": "you", "results": results}
 
 
-def extract_plus(urls: List[str], provider: str = "auto", output_format: str = "markdown", include_images: bool = False, include_raw_html: bool = False, render_js: bool = False) -> Dict[str, Any]:
+def extract_plus(urls: List[str], provider: str = "auto", output_format: str = "markdown", include_images: bool = False, include_raw_html: bool = False, render_js: bool = False, allow_private: bool = False) -> Dict[str, Any]:
     requested_provider = provider or "auto"
     if not urls:
         return {"provider": requested_provider, "results": [], "error": "No URLs provided", "routing": {"requested_provider": requested_provider}}
@@ -303,6 +307,18 @@ def extract_plus(urls: List[str], provider: str = "auto", output_format: str = "
     invalid_urls = [url for url in cleaned_urls if not url.startswith(("http://", "https://"))]
     if invalid_urls:
         return {"provider": requested_provider, "results": [], "error": f"Invalid URL(s) — must start with http:// or https://: {json.dumps(invalid_urls)}", "routing": {"requested_provider": requested_provider}}
+    # SSRF guard: block private/loopback/link-local targets and cloud metadata
+    # endpoints before any URL is fetched or forwarded to an extraction provider.
+    # Opt out for trusted private networks via --allow-private-urls or
+    # WSP_ALLOW_PRIVATE_URLS=1 (metadata endpoints stay blocked).
+    blocked_urls = []
+    for url in cleaned_urls:
+        try:
+            validate_outbound_url(url, allow_private=allow_private, label="Extraction URL")
+        except ValueError as exc:
+            blocked_urls.append(str(exc))
+    if blocked_urls:
+        return {"provider": requested_provider, "results": [], "error": "; ".join(blocked_urls), "routing": {"requested_provider": requested_provider}}
     providers = EXTRACT_PROVIDER_PRIORITY if requested_provider == "auto" else [requested_provider] + [p for p in EXTRACT_PROVIDER_PRIORITY if p != requested_provider]
     errors = []
     for current_provider in providers:
@@ -325,6 +341,10 @@ def extract_plus(urls: List[str], provider: str = "auto", output_format: str = "
             else:
                 result = extract_you(cleaned_urls, credential, output_format, include_images, include_raw_html, render_js)
             result_list = result.get("results") or []
+            # Never surface credentials, even if a provider echoes one back in an error.
+            for item in result_list:
+                if item.get("error"):
+                    item["error"] = redact_secrets(str(item["error"]))
             if result_list and all(item.get("error") for item in result_list):
                 errors.append({"provider": current_provider, "error": "all_urls_failed", "details": [item.get("error") for item in result_list]})
                 continue
@@ -336,7 +356,7 @@ def extract_plus(urls: List[str], provider: str = "auto", output_format: str = "
             }
             return result
         except Exception as exc:
-            errors.append({"provider": current_provider, "error": str(exc)})
+            errors.append({"provider": current_provider, "error": redact_secrets(str(exc))})
     return {
         "provider": requested_provider,
         "results": [],
@@ -354,13 +374,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--include-images", action="store_true")
     parser.add_argument("--include-raw-html", action="store_true")
     parser.add_argument("--render-js", action="store_true")
+    parser.add_argument("--allow-private-urls", action="store_true", help="Allow URLs that resolve to private/internal networks (off by default; see WSP_ALLOW_PRIVATE_URLS)")
     parser.add_argument("--compact", action="store_true", help="Print compact JSON")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    result = extract_plus(args.urls or [], args.provider, args.format, args.include_images, args.include_raw_html, args.render_js)
+    result = extract_plus(args.urls or [], args.provider, args.format, args.include_images, args.include_raw_html, args.render_js, allow_private=args.allow_private_urls)
     if args.compact:
         print(json.dumps(result, ensure_ascii=False))
     else:
