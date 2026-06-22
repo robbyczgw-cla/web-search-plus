@@ -165,3 +165,7 @@ python3 scripts/extract.py --url https://example.com --provider auto --compact
 
 - OpenClaw plugin: `../projects/web-search-plus-plugin`
 - Hermes port: `../projects/hermes-web-search-plus`
+
+## Download History
+
+[![Download History](https://skill-history.com/chart/robbyczgw-cla/web-search-plus.svg)](https://skill-history.com/robbyczgw-cla/web-search-plus)
