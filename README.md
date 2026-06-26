@@ -8,6 +8,9 @@ Unified multi-provider web search and URL extraction for OpenClaw-style agent wo
 
 Current version: **3.2.0**
 
+> **Status: stable & frozen — not the main development path.**
+> This OpenClaw skill is feature-complete on the Web Search Plus engine **v2.4 line** and works as-is. It is **not** where active development happens. New engine features (Keenable, adaptive routing memory, GroktoCrawl-compatible backends, …) land on the actively-developed surfaces: **[hermes-web-search-plus](https://github.com/robbyczgw-cla/hermes-web-search-plus)** (the engine source of truth) and the **[web-search-plus-mcp](https://github.com/robbyczgw-cla/web-search-plus-mcp)** server. No further engine syncs are planned for this OpenClaw build.
+
 ## ⚠️ Data handling & privacy
 
 - **Search queries and extraction URLs are sent to the configured third-party providers** (Serper, Brave, Tavily, Linkup, Querit, Exa, Firecrawl, SerpBase, Perplexity via Kilo, You.com, or your SearXNG instance). Each provider's privacy policy and retention rules apply to what you send.
