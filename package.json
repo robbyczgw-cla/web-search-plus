@@ -115,7 +115,7 @@
           "ydc-index.io",
           "scrape.serper.dev",
           "api.keenable.ai",
-          "api.serpbase.com",
+          "api.serpbase.dev",
           "user-configured SearXNG instance (SEARXNG_INSTANCE_URL)"
         ],
         "note": "Search queries and extraction URLs are transmitted to whichever of these third-party providers is selected. URLs supplied for extraction are also fetched by the chosen provider's infrastructure."

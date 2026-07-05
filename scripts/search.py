@@ -420,7 +420,7 @@ DEFAULT_CONFIG = {
         "language": "en"
     },
     "serpbase": {
-        "api_url": "https://api.serpbase.com/search",
+        "api_url": "https://api.serpbase.dev/google/search",
         "timeout": 30,
     },
     "keenable": {
@@ -3057,7 +3057,7 @@ def search_serpbase(
     api_key: str,
     max_results: int = 5,
     time_range: Optional[str] = None,
-    api_url: str = "https://api.serpbase.com/search",
+    api_url: str = "https://api.serpbase.dev/google/search",
     timeout: int = 30,
 ) -> dict:
     """Search using SerpBase (low-cost Google Search API with prepaid credits).
@@ -3074,26 +3074,22 @@ def search_serpbase(
         api_key: SerpBase API key
         max_results: Maximum results to return (default 5)
         time_range: Filter by recency: hour, day, week, month, year
-        api_url: SerpBase API endpoint (default https://api.serpbase.com/search)
+        api_url: SerpBase API endpoint (default https://api.serpbase.dev/google/search)
         timeout: Request timeout in seconds (default 30)
     """
-    params = {
-        "api_key": api_key,
+    body = {
         "q": query,
-        "num": str(max_results),
+        "page": 1,
     }
-    if time_range and time_range != "none":
-        params["time_range"] = time_range
-
-    query_string = urlencode(params)
-    url = f"{api_url}?{query_string}"
 
     headers = {
+        "X-API-Key": api_key,
+        "Content-Type": "application/json",
         "Accept": "application/json",
-        "User-Agent": "WebSearchPlus-Skill/3.2.0",
+        "User-Agent": "WebSearchPlus-Skill/3.3.0",
     }
 
-    req = Request(url, headers=headers, method="GET")
+    req = Request(api_url, data=json.dumps(body).encode("utf-8"), headers=headers, method="POST")
 
     try:
         with urlopen(req, timeout=timeout) as response:
@@ -3787,7 +3783,7 @@ Full docs: See README.md and SKILL.md
                 api_key=key,
                 max_results=args.max_results,
                 time_range=args.time_range or args.freshness,
-                api_url=serpbase_config.get("api_url", "https://api.serpbase.com/search"),
+                api_url=serpbase_config.get("api_url", "https://api.serpbase.dev/google/search"),
                 timeout=int(serpbase_config.get("timeout", 30)),
             )
         elif prov == "keenable":
