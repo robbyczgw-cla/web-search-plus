@@ -28,7 +28,17 @@ def private_urls_allowed() -> bool:
     return os.environ.get(ALLOW_PRIVATE_ENV, "").strip() == "1"
 
 
+# CGNAT / shared address space (RFC 6598) is not covered by is_private on all
+# Python versions, so it is checked explicitly.
+_CGNAT_NETWORK = ipaddress.ip_network("100.64.0.0/10")
+
+
 def _is_blocked_ip(ip: ipaddress._BaseAddress) -> bool:
+    # IPv4-mapped IPv6 addresses (::ffff:10.0.0.1) inherit the verdict of the
+    # embedded IPv4 address so the mapping cannot bypass the guard.
+    mapped = getattr(ip, "ipv4_mapped", None)
+    if mapped is not None:
+        return _is_blocked_ip(mapped)
     return (
         ip.is_loopback
         or ip.is_private
@@ -36,6 +46,7 @@ def _is_blocked_ip(ip: ipaddress._BaseAddress) -> bool:
         or ip.is_reserved
         or ip.is_unspecified
         or ip.is_multicast
+        or (ip.version == 4 and ip in _CGNAT_NETWORK)
     )
 
 
