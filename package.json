@@ -1,7 +1,7 @@
 {
   "name": "web-search-plus",
-  "version": "3.2.0",
-  "description": "Unified multi-provider web search and URL extraction skill with intelligent auto-routing across Serper, Brave, Tavily, Querit, Linkup, Exa, Firecrawl, Perplexity, You.com, SearXNG, and SerpBase. Queries and URLs are sent to the configured third-party provider APIs; results and provider failure history are cached locally under .cache (configurable via WSP_CACHE_DIR, disable with WSP_DISABLE_CACHE=1 or --no-cache).",
+  "version": "3.3.0",
+  "description": "Unified multi-provider web search and URL extraction skill with intelligent auto-routing across Serper, Brave, Tavily, Querit, Linkup, Exa, Firecrawl, Perplexity, You.com, SearXNG, SerpBase, and Keenable. Adds unified freshness/news filters, locale-aware defaults, spam/mirror result filtering, and adaptive provider routing. Queries and URLs are sent to the configured third-party provider APIs; results, provider failure history, and provider performance stats are cached locally under .cache (configurable via WSP_CACHE_DIR, disable with WSP_DISABLE_CACHE=1 or --no-cache).",
   "keywords": [
     "openclaw",
     "skill",
@@ -37,7 +37,11 @@
     "content-extraction",
     "firecrawl",
     "brave-search",
-    "linkup"
+    "linkup",
+    "keenable",
+    "news-search",
+    "locale",
+    "spam-filter"
   ],
   "author": "robbyczgw-cla",
   "license": "MIT",
@@ -88,11 +92,13 @@
         "LINKUP_API_KEY": "optional",
         "EXA_API_KEY": "optional",
         "FIRECRAWL_API_KEY": "optional",
-        "PERPLEXITY_API_KEY": "optional \u2014 direct Perplexity provider credential",
-        "KILOCODE_API_KEY": "optional \u2014 alternative Perplexity provider via Kilo Gateway",
+        "PERPLEXITY_API_KEY": "optional — direct Perplexity provider credential",
+        "KILOCODE_API_KEY": "optional — alternative Perplexity provider via Kilo Gateway",
         "YOU_API_KEY": "optional",
         "SEARXNG_INSTANCE_URL": "optional",
-        "SERPBASE_API_KEY": "optional \u2014 explicit/fallback-only Google SERP provider"
+        "SERPBASE_API_KEY": "optional — explicit/fallback-only Google SERP provider",
+        "KEENABLE_API_KEY": "optional — Keenable independent web index (search + extraction)",
+        "WSP_KEENABLE_ALLOW_PUBLIC": "optional — set 1 to opt in to Keenable keyless shared public tier (no SLA)"
       }
     },
     "permissions": {
@@ -107,6 +113,8 @@
           "api.firecrawl.dev",
           "api.kilo.ai",
           "ydc-index.io",
+          "scrape.serper.dev",
+          "api.keenable.ai",
           "api.serpbase.com",
           "user-configured SearXNG instance (SEARXNG_INSTANCE_URL)"
         ],
@@ -129,12 +137,17 @@
           "SEARXNG_ALLOW_PRIVATE",
           "WSP_CACHE_DIR",
           "WSP_DISABLE_CACHE",
-          "WSP_ALLOW_PRIVATE_URLS"
+          "WSP_ALLOW_PRIVATE_URLS",
+          "KEENABLE_API_KEY",
+          "WSP_KEENABLE_ALLOW_PUBLIC",
+          "WSP_EXTRACT_CHAR_LIMIT",
+          "WSP_LOCALE_COUNTRY",
+          "WSP_LOCALE_LANGUAGE"
         ]
       },
       "filesystem": {
         "write": [
-          ".cache/ (or WSP_CACHE_DIR) \u2014 cached search results and provider_health.json failure history; created mode 0700, files mode 0600"
+          ".cache/ (or WSP_CACHE_DIR) — cached search results, provider_health.json failure history, and provider_stats.json performance samples; created mode 0700, files mode 0600"
         ]
       }
     }

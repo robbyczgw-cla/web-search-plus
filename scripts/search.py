@@ -57,8 +57,15 @@ try:
         rerank_results_for_intent,
         select_research_providers,
     )
+    from .quality import (
+        extract_domain_constraints,
+        filter_spam_results,
+        rerank_domain_diversity,
+    )
     from .research import run_research_mode
     from .url_security import validate_outbound_url
+    from . import provider_stats
+    from . import search_locale
 except ImportError:
     import provider_registry
     from quality import (  # noqa: F401
@@ -71,8 +78,15 @@ except ImportError:
         rerank_results_for_intent,
         select_research_providers,
     )
+    from quality import (
+        extract_domain_constraints,
+        filter_spam_results,
+        rerank_domain_diversity,
+    )
     from research import run_research_mode
     from url_security import validate_outbound_url
+    import provider_stats
+    import search_locale
 
 
 # =============================================================================
@@ -348,7 +362,7 @@ DEFAULT_CONFIG = {
     "auto_routing": {
         "enabled": True,
         "fallback_provider": "serper",
-        "provider_priority": ["tavily", "linkup", "querit", "exa", "firecrawl", "perplexity", "brave", "serper", "you", "searxng"],
+        "provider_priority": ["tavily", "linkup", "querit", "exa", "firecrawl", "perplexity", "brave", "serper", "you", "searxng", "keenable"],
         # Note: "serpbase" is intentionally NOT in default auto-routing priority — it is explicit/fallback-only.
         # Use --provider serpbase OR add it to provider_priority in config.json to opt-in.
         "disabled_providers": [],
@@ -408,6 +422,24 @@ DEFAULT_CONFIG = {
     "serpbase": {
         "api_url": "https://api.serpbase.com/search",
         "timeout": 30,
+    },
+    "keenable": {
+        "api_url": "https://api.keenable.ai/v1/search",
+        "allow_public": False,
+        "timeout": 30,
+    },
+    "locale": {
+        # Default country (ISO 3166-1 alpha-2) and language (ISO 639-1, or
+        # "auto" for conservative query language inference) for providers with
+        # locale parameters. Env overrides: WSP_LOCALE_COUNTRY / WSP_LOCALE_LANGUAGE.
+        "country": None,
+        "language": None,
+    },
+    "quality": {
+        # Extra spam/mirror domains to remove from results, and domains to
+        # rescue from the builtin blocklist (exact domain or true subdomains).
+        "blocked_domains": [],
+        "allowed_domains": [],
     }
 }
 
@@ -464,6 +496,24 @@ def get_api_key(provider: str, config: Dict[str, Any] = None) -> Optional[str]:
         if value:
             return value
     return None
+
+
+KEENABLE_ALLOW_PUBLIC_ENV = "WSP_KEENABLE_ALLOW_PUBLIC"
+
+
+def keenable_public_allowed(config: Dict[str, Any] = None) -> bool:
+    """True when the operator opted in to Keenable's keyless public tier."""
+    if config and isinstance(config.get("keenable"), dict) and config["keenable"].get("allow_public") is True:
+        return True
+    return os.environ.get(KEENABLE_ALLOW_PUBLIC_ENV, "").strip() == "1"
+
+
+def provider_is_configured(provider: str, config: Dict[str, Any] = None) -> bool:
+    """Whether a provider can be called. Keenable can run keyless against its
+    opt-in public tier, so availability is not purely "has an API key"."""
+    if get_api_key(provider, config):
+        return True
+    return provider == "keenable" and keenable_public_allowed(config)
 
 
 def _validate_searxng_url(url: str) -> str:
@@ -585,6 +635,20 @@ def validate_api_key(provider: str, config: Dict[str, Any] = None) -> str:
         
         return key
     
+    if not key and provider == "keenable":
+        if keenable_public_allowed(config):
+            return ""
+        raise ProviderConfigError(json.dumps({
+            "error": "Keenable requires an API key (KEENABLE_API_KEY) or the opt-in public tier",
+            "env_var": "KEENABLE_API_KEY",
+            "how_to_fix": [
+                "1. Get an API key from https://keenable.ai and export KEENABLE_API_KEY=\"your-key\"",
+                "2. Or opt in to the keyless shared public tier (~1000 req/hour, no SLA): export WSP_KEENABLE_ALLOW_PUBLIC=1",
+                "3. Or add to config.json: \"keenable\": {\"allow_public\": true}",
+            ],
+            "provider": provider,
+        }))
+
     if not key:
         spec = provider_registry.PROVIDER_SPECS[provider]
         env_var = spec.env_var
@@ -1315,6 +1379,8 @@ class QueryAnalyzer:
             "you": rag_score + (recency_score * 0.25),  # You.com good for real-time + RAG
             "searxng": privacy_score,  # SearXNG for privacy/multi-source queries
             "firecrawl": discovery_score + (research_score * 0.35) + (recency_score * 0.25),
+            # Keenable is a last-resort fallback: no query-class signals boost it.
+            "keenable": 0.0,
         }
         
         # Build match details per provider
@@ -1329,6 +1395,7 @@ class QueryAnalyzer:
             "you": rag_matches,
             "searxng": privacy_matches,
             "firecrawl": discovery_matches + research_matches,
+            "keenable": [],
         }
         
         return {
@@ -1355,8 +1422,13 @@ class QueryAnalyzer:
         disabled = set(self.auto_config.get("disabled_providers", []))
         available = {
             p: s for p, s in scores.items()
-            if p not in disabled and get_api_key(p, self.config)
+            if p not in disabled and provider_is_configured(p, self.config)
         }
+        # Adaptive provider performance memory: bounded score adjustments from
+        # recent real-world latency/result-count/error outcomes.
+        adaptive_adjustments = provider_stats.performance_adjustments(list(available.keys()))
+        for p, adjustment in adaptive_adjustments.items():
+            available[p] = available[p] + adjustment
         
         if not available:
             # No providers available, use fallback
@@ -1376,8 +1448,11 @@ class QueryAnalyzer:
         total_score = sum(available.values()) or 1.0
         
         # Handle ties using deterministic per-query distribution
-        priority = self.auto_config.get("provider_priority", ["tavily", "linkup", "querit", "exa", "firecrawl", "perplexity", "brave", "serper", "you", "searxng"])
+        priority = self.auto_config.get("provider_priority", list(provider_registry.DEFAULT_PROVIDER_PRIORITY))
         winners = [p for p, s in available.items() if s == max_score]
+        # Keenable never displaces another configured provider on a score tie.
+        if len(winners) > 1 and "keenable" in winners:
+            winners = [p for p in winners if p != "keenable"]
         
         if len(winners) > 1:
             winner = _choose_tie_winner(query, winners, priority)
@@ -1440,6 +1515,7 @@ class QueryAnalyzer:
             "reason": reason,
             "exa_depth": exa_depth,
             "scores": {p: round(s, 2) for p, s in available.items()},
+            "adaptive_adjustments": adaptive_adjustments,
             "winning_score": round(max_score, 2),
             "top_signals": [
                 {"matched": s["matched"], "weight": s["weight"]}
@@ -1513,12 +1589,64 @@ def explain_routing(query: str, config: Dict[str, Any]) -> Dict[str, Any]:
             if matches
         },
         "available_providers": [
-            p for p in ["serper", "brave", "tavily", "linkup", "querit", "exa", "firecrawl", "perplexity", "you", "searxng"]
-            if get_api_key(p, config) and p not in config.get("auto_routing", {}).get("disabled_providers", [])
+            p for p in ["serper", "brave", "tavily", "linkup", "querit", "exa", "firecrawl", "perplexity", "you", "searxng", "keenable"]
+            if provider_is_configured(p, config) and p not in config.get("auto_routing", {}).get("disabled_providers", [])
         ]
     }
 
 
+
+
+
+# =============================================================================
+# Unified freshness filter & search type (plugin/hermes v2.8-v2.9 parity)
+# =============================================================================
+
+FRESHNESS_VALUES = ("day", "week", "month", "year")
+
+# Native recency formats per provider, derived from the request bodies the
+# provider functions in this module already send. Providers absent from this
+# table (tavily, exa, linkup) have no relative-recency parameter in their
+# current API calls, so no native value is invented for them.
+PROVIDER_FRESHNESS_FORMATS = {
+    "serper": {"day": "qdr:d", "week": "qdr:w", "month": "qdr:m", "year": "qdr:y"},
+    "brave": {"day": "pd", "week": "pw", "month": "pm", "year": "py"},
+    "querit": {"day": "d1", "week": "w1", "month": "m1", "year": "y1"},
+    "firecrawl": {"day": "qdr:d", "week": "qdr:w", "month": "qdr:m", "year": "qdr:y"},
+    "keenable": {"day": "1d", "week": "7d", "month": "1mo", "year": "1y"},
+    "serpbase": {"day": "day", "week": "week", "month": "month", "year": "year"},
+    "you": {"day": "day", "week": "week", "month": "month", "year": "year"},
+    "perplexity": {"day": "day", "week": "week", "month": "month", "year": "year"},
+    "searxng": {"day": "day", "week": "week", "month": "month", "year": "year"},
+}
+
+
+def freshness_metadata(provider: str, requested: str) -> Dict[str, Any]:
+    """Describe whether a provider applied the requested freshness filter."""
+    native = PROVIDER_FRESHNESS_FORMATS.get(provider, {}).get(requested)
+    if native is not None:
+        return {"requested": requested, "applied": True, "provider": provider, "native_value": native}
+    return {"requested": requested, "applied": False, "provider": provider, "reason": f"provider {provider} does not support freshness"}
+
+
+SEARCH_TYPE_VALUES = ("search", "news")
+
+# Providers whose API natively serves a Google-tab-style result vertical.
+# Providers absent from this table always run their normal web search and
+# report search_type.applied=False in metadata. (Serper additionally accepts
+# images/videos/places/shopping verticals via --type; only search/news are
+# part of the unified cross-provider surface.)
+PROVIDER_SEARCH_TYPES = {
+    "serper": {"search": "search", "news": "news", "images": "images", "videos": "videos", "places": "places", "shopping": "shopping"},
+}
+
+
+def search_type_metadata(provider: str, requested: str) -> Dict[str, Any]:
+    """Describe whether a provider applied the requested search type."""
+    native = PROVIDER_SEARCH_TYPES.get(provider, {}).get(requested)
+    if native is not None:
+        return {"requested": requested, "applied": True, "provider": provider, "native_value": native}
+    return {"requested": requested, "applied": False, "provider": provider, "reason": f"provider {provider} does not support search_type {requested}"}
 
 
 class ProviderConfigError(Exception):
@@ -1529,10 +1657,28 @@ class ProviderConfigError(Exception):
 class ProviderRequestError(Exception):
     """Structured provider error with retry/cooldown metadata."""
 
-    def __init__(self, message: str, status_code: Optional[int] = None, transient: bool = False):
+    def __init__(self, message: str, status_code: Optional[int] = None, transient: bool = False, retry_after: Optional[float] = None):
         super().__init__(message)
         self.status_code = status_code
         self.transient = transient
+        self.retry_after = retry_after
+
+
+def parse_retry_after(value: Optional[str]) -> Optional[float]:
+    """Parse a Retry-After response header (delta-seconds or HTTP-date) into seconds."""
+    if not value:
+        return None
+    trimmed = value.strip()
+    if trimmed.isdigit():
+        return float(trimmed)
+    try:
+        from email.utils import parsedate_to_datetime
+        dt = parsedate_to_datetime(trimmed)
+        if dt is not None:
+            return max(0.0, dt.timestamp() - time.time())
+    except (TypeError, ValueError):
+        pass
+    return None
 
 
 def _response_header(response, name: str, default: str = "") -> str:
@@ -1579,8 +1725,18 @@ def _read_response_body(response) -> bytes:
     return raw
 
 
-TRANSIENT_HTTP_CODES = {429, 503}
+TRANSIENT_HTTP_CODES = {408, 425, 429, 500, 502, 503, 504}
 COOLDOWN_STEPS_SECONDS = [60, 300, 1500, 3600]  # 1m -> 5m -> 25m -> 1h cap
+# Failures older than this no longer escalate the cooldown ladder: a provider
+# that fails once every few hours should restart at the shortest cooldown step
+# instead of compounding toward the 1h cap.
+FAILURE_DECAY_SECONDS = 1800
+# Rate-limit (429) responses get at most one retry per request; burning the
+# full retry budget against an exhausted quota only wastes time and credits.
+RATE_LIMIT_MAX_ATTEMPTS = 2
+# Longest Retry-After wait honored inline. Anything above this is left to the
+# cooldown ladder instead of blocking the current request.
+MAX_RETRY_AFTER_WAIT_SECONDS = 30
 RETRY_BACKOFF_SECONDS = [1, 3, 9]
 # Add up to this fraction of the base delay as random jitter so concurrent or
 # repeated retries against a recovering provider do not synchronize into bursts.
@@ -1631,13 +1787,21 @@ def provider_in_cooldown(provider: str) -> Tuple[bool, int]:
     return (remaining > 0, max(0, remaining))
 
 
-def mark_provider_failure(provider: str, error_message: str) -> Dict[str, Any]:
+def mark_provider_failure(provider: str, error_message: str, retry_after: Optional[float] = None) -> Dict[str, Any]:
     with _HEALTH_LOCK:
         state = _load_provider_health()
         now = int(time.time())
         pstate = state.get(provider, {})
-        fail_count = int(pstate.get("failure_count", 0)) + 1
+        prev_count = int(pstate.get("failure_count", 0))
+        last_failure_at = int(pstate.get("last_failure_at", 0) or 0)
+        if last_failure_at and now - last_failure_at > FAILURE_DECAY_SECONDS:
+            # Stale failure history: restart the escalation ladder.
+            prev_count = 0
+        fail_count = prev_count + 1
         cooldown_seconds = COOLDOWN_STEPS_SECONDS[min(fail_count - 1, len(COOLDOWN_STEPS_SECONDS) - 1)]
+        if retry_after is not None and retry_after > 0:
+            # Respect the provider's explicit wait request, capped at the ladder max.
+            cooldown_seconds = min(max(cooldown_seconds, int(retry_after)), COOLDOWN_STEPS_SECONDS[-1])
         state[provider] = {
             "failure_count": fail_count,
             "cooldown_until": now + cooldown_seconds,
@@ -1694,7 +1858,13 @@ def make_request(url: str, headers: dict, body: dict, timeout: int = 30) -> dict
     
     try:
         with urlopen(req, timeout=timeout) as response:
-            return json.loads(_read_response_body(response).decode("utf-8"))
+            raw = _read_response_body(response).decode("utf-8")
+            try:
+                return json.loads(raw)
+            except json.JSONDecodeError as decode_error:
+                # Surface malformed provider payloads as clear provider errors
+                # so retry/fallback handling can react to them.
+                raise ProviderRequestError(f"Invalid JSON response from provider: {decode_error}", transient=True)
     except HTTPError as e:
         error_body = e.read().decode("utf-8") if e.fp else str(e)
         try:
@@ -1712,7 +1882,8 @@ def make_request(url: str, headers: dict, body: dict, timeout: int = 30) -> dict
         }
         
         friendly_msg = error_messages.get(e.code, f"API error: {error_detail}")
-        raise ProviderRequestError(f"{friendly_msg} (HTTP {e.code})", status_code=e.code, transient=e.code in TRANSIENT_HTTP_CODES)
+        retry_after = parse_retry_after(_response_header(e, "Retry-After")) if e.code == 429 else None
+        raise ProviderRequestError(f"{friendly_msg} (HTTP {e.code})", status_code=e.code, transient=e.code in TRANSIENT_HTTP_CODES, retry_after=retry_after)
     except URLError as e:
         reason = str(getattr(e, "reason", e))
         is_timeout = "timed out" in reason.lower()
@@ -1735,7 +1906,13 @@ def make_get_request(url: str, headers: dict, timeout: int = 30) -> dict:
 
     try:
         with urlopen(req, timeout=timeout) as response:
-            return json.loads(_read_response_body(response).decode("utf-8"))
+            raw = _read_response_body(response).decode("utf-8")
+            try:
+                return json.loads(raw)
+            except json.JSONDecodeError as decode_error:
+                # Surface malformed provider payloads as clear provider errors
+                # so retry/fallback handling can react to them.
+                raise ProviderRequestError(f"Invalid JSON response from provider: {decode_error}", transient=True)
     except HTTPError as e:
         error_body = e.read().decode("utf-8") if e.fp else str(e)
         try:
@@ -1753,7 +1930,8 @@ def make_get_request(url: str, headers: dict, timeout: int = 30) -> dict:
         }
 
         friendly_msg = error_messages.get(e.code, f"API error: {error_detail}")
-        raise ProviderRequestError(f"{friendly_msg} (HTTP {e.code})", status_code=e.code, transient=e.code in TRANSIENT_HTTP_CODES)
+        retry_after = parse_retry_after(_response_header(e, "Retry-After")) if e.code == 429 else None
+        raise ProviderRequestError(f"{friendly_msg} (HTTP {e.code})", status_code=e.code, transient=e.code in TRANSIENT_HTTP_CODES, retry_after=retry_after)
     except URLError as e:
         reason = str(getattr(e, "reason", e))
         is_timeout = "timed out" in reason.lower()
@@ -1811,15 +1989,27 @@ def search_serper(
     
     data = make_request(endpoint, headers, body)
     
+    # /news answers carry results under "news" (title/link/snippet/date/source/
+    # imageUrl/position) instead of "organic"; reading only "organic" used to
+    # silently return zero results for the news vertical.
+    raw_items = data.get("news", []) if search_type == "news" else data.get("organic", [])
     results = []
-    for i, item in enumerate(data.get("organic", [])[:max_results]):
-        results.append({
+    for i, item in enumerate(raw_items[:max_results]):
+        result = {
             "title": item.get("title", ""),
             "url": item.get("link", ""),
             "snippet": item.get("snippet", ""),
             "score": round(1.0 - i * 0.1, 2),
             "date": item.get("date"),
-        })
+        }
+        if search_type == "news":
+            if item.get("source") is not None:
+                result["source"] = item["source"]
+            if item.get("imageUrl"):
+                result["thumbnail"] = item["imageUrl"]
+            if item.get("position") is not None:
+                result["position"] = item["position"]
+        results.append(result)
     
     answer = ""
     if data.get("answerBox", {}).get("answer"):
@@ -2639,7 +2829,8 @@ def search_you(
             503: "You.com service unavailable."
         }
         friendly_msg = error_messages.get(e.code, f"API error: {error_detail}")
-        raise ProviderRequestError(f"{friendly_msg} (HTTP {e.code})", status_code=e.code, transient=e.code in TRANSIENT_HTTP_CODES)
+        retry_after = parse_retry_after(_response_header(e, "Retry-After")) if e.code == 429 else None
+        raise ProviderRequestError(f"{friendly_msg} (HTTP {e.code})", status_code=e.code, transient=e.code in TRANSIENT_HTTP_CODES, retry_after=retry_after)
     except URLError as e:
         reason = str(getattr(e, "reason", e))
         is_timeout = "timed out" in reason.lower()
@@ -2982,6 +3173,76 @@ def search_serpbase(
 # CLI
 # =============================================================================
 
+# =============================================================================
+# Keenable (independent web index; keyed or opt-in keyless public tier)
+# =============================================================================
+
+KEENABLE_TIME_RANGE = {"hour": "1h", "day": "1d", "week": "7d", "month": "1mo", "year": "1y"}
+
+
+def _keenable_endpoint(api_url: str, api_key: Optional[str], public_allowed: bool) -> Tuple[str, Dict[str, str]]:
+    """A present key always uses the authenticated route; with no key, the
+    keyless /public route is used when the public tier is enabled."""
+    headers = {"X-Keenable-Title": "web-search-plus"}
+    if api_key:
+        headers["X-API-Key"] = api_key
+        return api_url, headers
+    if public_allowed:
+        return f"{api_url}/public", headers
+    raise ProviderConfigError("Keenable requires an API key or an enabled public endpoint")
+
+
+def search_keenable(
+    query: str,
+    api_key: Optional[str] = None,
+    max_results: int = 5,
+    time_range: Optional[str] = None,
+    include_domains: Optional[List[str]] = None,
+    public_allowed: bool = False,
+    api_url: str = "https://api.keenable.ai/v1/search",
+    timeout: int = 30,
+) -> dict:
+    """Search using Keenable's independent web index."""
+    body: Dict[str, Any] = {"query": query}
+    if time_range and KEENABLE_TIME_RANGE.get(time_range):
+        body["published_after"] = KEENABLE_TIME_RANGE[time_range]
+    if include_domains:
+        body["site"] = include_domains[0]
+    endpoint, headers = _keenable_endpoint(api_url, api_key, public_allowed)
+    headers["Content-Type"] = "application/json"
+    data = make_request(endpoint, headers, body, timeout=timeout)
+
+    results = []
+    for i, item in enumerate((data.get("results") or [])[:max_results]):
+        result = {
+            "title": item.get("title") or _title_from_url(item.get("url", "")),
+            "url": item.get("url", ""),
+            "snippet": item.get("snippet") or item.get("description") or "",
+            "score": round(1.0 - i * 0.05, 3),
+            "date": item.get("published_at"),
+        }
+        if item.get("acquired_at") is not None:
+            result["acquired_at"] = item["acquired_at"]
+        results.append(result)
+
+    metadata: Dict[str, Any] = {"number_of_results": data.get("number_of_results")}
+    if not api_key and public_allowed:
+        metadata["public_endpoint"] = True
+        metadata["public_endpoint_warning"] = (
+            "Keenable keyless public endpoint in use: queries are sent to an "
+            "unauthenticated shared service (https://keenable.ai) with no SLA. "
+            "Set KEENABLE_API_KEY for the authenticated endpoint."
+        )
+    return {
+        "provider": "keenable",
+        "query": query,
+        "results": results,
+        "images": [],
+        "answer": results[0]["snippet"] if results else "",
+        "metadata": metadata,
+    }
+
+
 def main():
     config = load_config()
     
@@ -3053,8 +3314,8 @@ Full docs: See README.md and SKILL.md
     
     # Serper-specific
     serper_config = config.get("serper", {})
-    parser.add_argument("--country", default=serper_config.get("country", "us"))
-    parser.add_argument("--language", default=serper_config.get("language", "en"))
+    parser.add_argument("--country", default=None, help="ISO 3166-1 alpha-2 country for locale-aware providers (default: config locale.country / WSP_LOCALE_COUNTRY / query location hint / us)")
+    parser.add_argument("--language", default=None, help="ISO 639-1 language for locale-aware providers (default: config locale.language / WSP_LOCALE_LANGUAGE, 'auto' enables query inference; fallback en)")
     parser.add_argument(
         "--type", 
         dest="search_type", 
@@ -3165,7 +3426,7 @@ Full docs: See README.md and SKILL.md
     parser.add_argument(
         "--freshness",
         choices=["day", "week", "month", "year"],
-        help="Filter results by recency (You.com/Serper)"
+        help="Unified recency filter: providers with native date filters receive the mapped value; others run the normal search and report freshness.applied=false in metadata"
     )
     parser.add_argument(
         "--livecrawl",
@@ -3301,6 +3562,23 @@ Full docs: See README.md and SKILL.md
 
     no_cache = args.no_cache or cache_disabled_by_env()
 
+    # Locale resolution (plugin/hermes v2.9 parity): config-first with explicit
+    # query location hints; legacy per-provider config country/language values
+    # seed the locale defaults so existing configs keep working.
+    if not isinstance(config.get("locale"), dict):
+        config["locale"] = {}
+    if isinstance(config.get("locale"), dict):
+        serper_cfg = config.get("serper", {})
+        if not config["locale"].get("country") and serper_cfg.get("country") not in (None, "us"):
+            config["locale"]["country"] = serper_cfg.get("country")
+        if not config["locale"].get("language") and serper_cfg.get("language") not in (None, "en"):
+            config["locale"]["language"] = serper_cfg.get("language")
+    resolved_locale = search_locale.resolve_locale(
+        "any", config, args.query, cli_country=args.country, cli_language=args.language
+    )
+    locale_country = resolved_locale["country"]
+    locale_language = resolved_locale["language"]
+
     # Handle --explain-routing
     if args.explain_routing:
         if not args.query:
@@ -3324,6 +3602,7 @@ Full docs: See README.md and SKILL.md
                 "top_signals": routing["top_signals"],
                 "scores": routing["scores"],
                 "exa_depth": routing.get("exa_depth", "normal"),
+                "adaptive_adjustments": routing.get("adaptive_adjustments", {}),
                 "analysis_summary": routing.get("analysis_summary", {}),
             }
         else:
@@ -3341,7 +3620,7 @@ Full docs: See README.md and SKILL.md
     
     # Build provider fallback list
     auto_config = config.get("auto_routing", {})
-    provider_priority = auto_config.get("provider_priority", ["tavily", "linkup", "querit", "exa", "firecrawl", "perplexity", "brave", "serper", "you", "searxng"])
+    provider_priority = auto_config.get("provider_priority", list(provider_registry.DEFAULT_PROVIDER_PRIORITY))
     disabled_providers = auto_config.get("disabled_providers", [])
 
     # Start with the selected provider, then try others in priority order
@@ -3349,7 +3628,7 @@ Full docs: See README.md and SKILL.md
     # which gets a clear error if unconfigured and no fallback succeeds)
     providers_to_try = [provider]
     for p in provider_priority:
-        if p not in providers_to_try and p not in disabled_providers and get_api_key(p, config):
+        if p not in providers_to_try and p not in disabled_providers and provider_is_configured(p, config):
             providers_to_try.append(p)
 
     # Skip providers currently in cooldown
@@ -3373,10 +3652,10 @@ Full docs: See README.md and SKILL.md
                 query=args.query,
                 api_key=key,
                 max_results=args.max_results,
-                country=args.country,
-                language=args.language,
+                country=locale_country,
+                language=locale_language,
                 search_type=args.search_type,
-                time_range=args.time_range,
+                time_range=args.time_range or args.freshness,
                 include_images=args.images,
             )
         elif prov == "brave":
@@ -3385,8 +3664,8 @@ Full docs: See README.md and SKILL.md
                 query=args.query,
                 api_key=key,
                 max_results=args.max_results,
-                country=brave_config.get("country", args.country),
-                language=brave_config.get("search_lang", args.language),
+                country=(brave_config.get("country") if brave_config.get("country") not in (None, "US") else locale_country.upper()),
+                language=(brave_config.get("search_lang") if brave_config.get("search_lang") not in (None, "en") else locale_language),
                 time_range=args.time_range or args.freshness,
                 safesearch=brave_config.get("safesearch", "moderate"),
             )
@@ -3420,8 +3699,8 @@ Full docs: See README.md and SKILL.md
                 query=args.query,
                 api_key=key,
                 max_results=args.max_results,
-                language=args.language,
-                country=args.country,
+                language=locale_language,
+                country=locale_country,
                 time_range=args.time_range or args.freshness,
                 include_domains=args.include_domains,
                 exclude_domains=args.exclude_domains,
@@ -3454,7 +3733,7 @@ Full docs: See README.md and SKILL.md
                 query=args.query,
                 api_key=key,
                 max_results=args.max_results,
-                country=firecrawl_config.get("country", args.country),
+                country=(firecrawl_config.get("country") if firecrawl_config.get("country") not in (None, "US") else locale_country.upper()),
                 time_range=args.time_range or args.freshness,
                 sources=args.firecrawl_sources,
                 include_domains=args.include_domains,
@@ -3479,8 +3758,8 @@ Full docs: See README.md and SKILL.md
                 query=args.query,
                 api_key=key,
                 max_results=args.max_results,
-                country=args.country,
-                language=args.language,
+                country=locale_country,
+                language=locale_language,
                 freshness=args.freshness,
                 safesearch=args.you_safesearch,
                 include_news=not args.no_news,
@@ -3497,8 +3776,8 @@ Full docs: See README.md and SKILL.md
                 max_results=args.max_results,
                 categories=args.categories,
                 engines=args.engines,
-                language=args.language,
-                time_range=args.time_range,
+                language=locale_language,
+                time_range=args.time_range or args.freshness,
                 safesearch=args.searxng_safesearch,
             )
         elif prov == "serpbase":
@@ -3511,27 +3790,57 @@ Full docs: See README.md and SKILL.md
                 api_url=serpbase_config.get("api_url", "https://api.serpbase.com/search"),
                 timeout=int(serpbase_config.get("timeout", 30)),
             )
+        elif prov == "keenable":
+            keenable_config = config.get("keenable", {})
+            return search_keenable(
+                query=args.query,
+                api_key=key or None,
+                max_results=args.max_results,
+                time_range=args.time_range or args.freshness,
+                include_domains=args.include_domains,
+                public_allowed=keenable_public_allowed(config),
+                api_url=keenable_config.get("api_url", "https://api.keenable.ai/v1/search"),
+                timeout=int(keenable_config.get("timeout", 30)),
+            )
         else:
             raise ValueError(f"Unknown provider: {prov}")
 
     def execute_with_retry(prov: str) -> Dict[str, Any]:
         last_error = None
+        started_at = time.monotonic()
         for attempt in range(0, 3):
             try:
-                return execute_search(prov)
+                result = execute_search(prov)
+                provider_stats.record_provider_outcome(prov, time.monotonic() - started_at, len(result.get("results", [])), False)
+                return result
             except ProviderRequestError as e:
                 last_error = e
                 if e.status_code in {401, 403}:
                     break
                 if not e.transient:
                     break
-                if attempt < 2:
+                is_rate_limited = e.status_code == 429
+                # Rate limits get at most one retry; burning the full budget
+                # against an exhausted quota only wastes time and credits.
+                attempt_cap = RATE_LIMIT_MAX_ATTEMPTS if is_rate_limited else 3
+                if attempt >= attempt_cap - 1:
+                    break
+                if is_rate_limited and e.retry_after is not None:
+                    if e.retry_after > MAX_RETRY_AFTER_WAIT_SECONDS:
+                        # Provider asked for a longer pause than we will block
+                        # inline; let the cooldown ladder handle it instead.
+                        break
+                    time.sleep(e.retry_after)
+                else:
                     time.sleep(_retry_delay(attempt))
-                    continue
-                break
+                continue
             except Exception as e:
                 last_error = e
                 break
+        # Configuration problems are not provider failures: they must not skew
+        # the adaptive performance memory.
+        if not isinstance(last_error, ProviderConfigError):
+            provider_stats.record_provider_outcome(prov, time.monotonic() - started_at, 0, True)
         raise last_error if last_error else Exception("Unknown provider execution error")
 
     providers_considered = providers_to_try.copy()
@@ -3546,14 +3855,14 @@ Full docs: See README.md and SKILL.md
 
         available_research_providers = {
             p for p in providers_to_try
-            if p not in disabled_providers and get_api_key(p, config) and not provider_in_cooldown(p)[0]
+            if p not in disabled_providers and provider_is_configured(p, config) and not provider_in_cooldown(p)[0]
         }
-        if provider and get_api_key(provider, config) and not provider_in_cooldown(provider)[0]:
+        if provider and provider_is_configured(provider, config) and not provider_in_cooldown(provider)[0]:
             available_research_providers.add(provider)
         if args.research_providers:
             research_providers = [
                 p for p in args.research_providers
-                if p not in disabled_providers and get_api_key(p, config) and not provider_in_cooldown(p)[0]
+                if p not in disabled_providers and provider_is_configured(p, config) and not provider_in_cooldown(p)[0]
             ]
         else:
             research_providers = select_research_providers(
@@ -3591,6 +3900,16 @@ Full docs: See README.md and SKILL.md
         routing_info["mode"] = "research"
         routing_info["provider"] = "research"
         result["routing"].update(routing_info)
+        if args.freshness:
+            result.setdefault("metadata", {})["freshness"] = {
+                "requested": args.freshness,
+                "per_provider": [freshness_metadata(p, args.freshness) for p in research_providers],
+            }
+        if args.search_type and args.search_type != "search":
+            result.setdefault("metadata", {})["search_type"] = {
+                "requested": args.search_type,
+                "per_provider": [search_type_metadata(p, args.search_type) for p in research_providers],
+            }
         result["quality_report"] = build_quality_report(
             query=args.query,
             result=result,
@@ -3604,8 +3923,11 @@ Full docs: See README.md and SKILL.md
         print(json.dumps(result, indent=indent, ensure_ascii=False))
         return
 
+    quality_config = config.get("quality", {}) if isinstance(config.get("quality"), dict) else {}
     cache_context = {
-        "locale": f"{args.country}:{args.language}",
+        "locale": f"{locale_country}:{locale_language}",
+        "quality_blocked_domains": sorted(quality_config.get("blocked_domains") or []) or None,
+        "quality_allowed_domains": sorted(quality_config.get("allowed_domains") or []) or None,
         "freshness": args.freshness,
         "time_range": args.time_range,
         "include_domains": sorted(args.include_domains) if args.include_domains else None,
@@ -3671,7 +3993,14 @@ Full docs: See README.md and SKILL.md
                 for field in ("api_key", "apiKey") if isinstance(section.get(field), str)
             )
             error_msg = provider_registry.redact_secrets(str(e), config_secrets)
-            cooldown_info = mark_provider_failure(current_provider, error_msg)
+            if isinstance(e, ProviderConfigError):
+                # Missing keys and other configuration problems are not provider
+                # failures: no cooldown, no unhealthy marking.
+                cooldown_info = {"cooldown_seconds": 0}
+            else:
+                cooldown_info = mark_provider_failure(
+                    current_provider, error_msg, retry_after=getattr(e, "retry_after", None)
+                )
             errors.append({
                 "provider": current_provider,
                 "error": error_msg,
@@ -3715,10 +4044,43 @@ Full docs: See README.md and SKILL.md
         # authority beats snippet luck, boost primary sources and demote mirrors.
         routing_class = routing_info.get("analysis_summary", {}).get("routing_class", "general")
         if not cache_hit and isinstance(result.get("results"), list):
+            # Explicit domain intent (site: queries, --include-domains) expresses
+            # user constraints: constrained domains are exempt from spam
+            # filtering and diversity reranking is skipped entirely.
+            domain_constraints = extract_domain_constraints(args.query or "", args.include_domains)
+            extra_blocked = quality_config.get("blocked_domains") or []
+            extra_allowed = quality_config.get("allowed_domains") or []
+            filtered, removed_domains = filter_spam_results(
+                result.get("results", []), extra_blocked, list(extra_allowed) + domain_constraints
+            )
+            result["results"] = filtered
+
             reranked, rerank_metadata = rerank_results_for_intent(args.query or "", routing_class, result.get("results", []))
             result["results"] = reranked
             if rerank_metadata.get("reranked"):
                 result.setdefault("metadata", {})["intent_rerank"] = rerank_metadata
+
+            diversity_demoted = 0
+            if not domain_constraints:
+                diversified, diversity_demoted = rerank_domain_diversity(result["results"])
+                result["results"] = diversified
+            if removed_domains or diversity_demoted or domain_constraints:
+                result.setdefault("metadata", {})["result_filter"] = {
+                    "spam_removed_domains": removed_domains,
+                    "diversity_demoted_count": diversity_demoted,
+                    "domain_constraints": domain_constraints,
+                }
+
+        if not cache_hit:
+            applied_provider = successful_provider or provider
+            if args.freshness:
+                result.setdefault("metadata", {})["freshness"] = freshness_metadata(applied_provider, args.freshness)
+            if args.search_type and args.search_type != "search":
+                result.setdefault("metadata", {})["search_type"] = search_type_metadata(applied_provider, args.search_type)
+            if search_locale.provider_supports_locale(applied_provider):
+                # Locale transparency (freshness-metadata pattern): report the
+                # resolved locale and per-value source.
+                result.setdefault("metadata", {})["locale"] = resolved_locale["metadata"]
 
         result["routing"] = routing_info
 

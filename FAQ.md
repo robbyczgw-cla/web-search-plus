@@ -191,7 +191,7 @@ python3 scripts/extract.py --url https://example.com --format html --include-raw
 
 ### Where do my queries and URLs go?
 
-**Every search query is transmitted to the third-party provider that serves it** — Serper, Brave, Tavily, Linkup, Querit, Exa, Firecrawl, SerpBase, Perplexity (via the Kilo gateway), You.com, or your SearXNG instance. **Every extraction URL is forwarded to the chosen extraction provider** (Firecrawl, Linkup, Tavily, Exa, You.com), whose servers fetch the page. Each provider's own privacy policy and data retention apply.
+**Every search query is transmitted to the third-party provider that serves it** — Serper, Brave, Tavily, Linkup, Querit, Exa, Firecrawl, SerpBase, Keenable, Perplexity (via the Kilo gateway), You.com, or your SearXNG instance. **Every extraction URL is forwarded to the chosen extraction provider** (Tavily, Exa, Linkup, Firecrawl, You.com, Keenable, Serper), whose servers fetch the page. Each provider's own privacy policy and data retention apply.
 
 ### How do I keep sensitive queries under control?
 

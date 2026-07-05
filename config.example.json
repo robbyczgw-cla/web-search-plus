@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Web Search Plus v3.1.0 example config — search routing plus extraction-capable provider settings (incl. opt-in SerpBase)",
+  "$comment": "Web Search Plus v3.3.0 example config — search routing plus extraction-capable provider settings (incl. opt-in SerpBase and Keenable)",
   "defaults": {
     "provider": "serper",
     "max_results": 5
@@ -18,7 +18,8 @@
       "brave",
       "serper",
       "you",
-      "searxng"
+      "searxng",
+      "keenable"
     ],
     "disabled_providers": [],
     "confidence_threshold": 0.3
@@ -57,7 +58,9 @@
     "api_url": "https://api.firecrawl.dev/v2/search",
     "country": "US",
     "timeout": 30000,
-    "sources": ["web"],
+    "sources": [
+      "web"
+    ],
     "ignore_invalid_urls": false
   },
   "perplexity": {
@@ -78,5 +81,21 @@
     "$comment": "SerpBase is explicit/fallback-only. To include in auto-routing, append 'serpbase' to auto_routing.provider_priority.",
     "api_url": "https://api.serpbase.com/search",
     "timeout": 30
+  },
+  "keenable": {
+    "$comment": "Keenable is lowest-priority: it never displaces a configured keyed provider. allow_public=true opts in to the keyless shared public tier (~1000 req/hour, no SLA); WSP_KEENABLE_ALLOW_PUBLIC=1 works too.",
+    "api_url": "https://api.keenable.ai/v1/search",
+    "allow_public": false,
+    "timeout": 30
+  },
+  "locale": {
+    "$comment": "Default country (ISO 3166-1 alpha-2) and language (ISO 639-1; 'auto' enables conservative query language inference) for locale-aware providers (Serper, Brave, Querit, Firecrawl, You.com, SearXNG). Explicit query location hints (e.g. 'restaurantes Madrid') override the country. Env: WSP_LOCALE_COUNTRY / WSP_LOCALE_LANGUAGE.",
+    "country": null,
+    "language": null
+  },
+  "quality": {
+    "$comment": "Extra spam/mirror domains to remove from results, and domains to rescue from the builtin blocklist (exact domain or true subdomains only).",
+    "blocked_domains": [],
+    "allowed_domains": []
   }
 }

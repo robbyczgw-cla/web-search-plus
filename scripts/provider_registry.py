@@ -40,9 +40,9 @@ _PROVIDER_SPECS = (
         description="Google-like SERP results for facts, shopping, local and news queries.",
         config_section="serper",
         supports_search=True,
-        supports_extract=False,
-        capability_labels=("search", "news", "shopping", "local"),
-        api_hosts=("google.serper.dev",),
+        supports_extract=True,
+        capability_labels=("search", "news", "shopping", "local", "extract"),
+        api_hosts=("google.serper.dev", "scrape.serper.dev"),
         free_tier="2,500 one-time credits",
         signup_url="https://serper.dev",
     ),
@@ -180,12 +180,26 @@ _PROVIDER_SPECS = (
         free_tier="100 free searches, paid packs available",
         signup_url="https://serpbase.dev",
     ),
+    ProviderSpec(
+        provider="keenable",
+        env_var="KEENABLE_API_KEY",
+        display_name="Keenable",
+        description="Independent web index for search and extraction; optional keyless public tier (opt-in). Lowest priority — never displaces a keyed provider.",
+        config_section="keenable",
+        supports_search=True,
+        supports_extract=True,
+        capability_labels=("search", "extract"),
+        api_hosts=("api.keenable.ai",),
+        free_tier="Keyless public tier (~1000 req/hour shared, opt-in, no SLA)",
+        signup_url="https://keenable.ai",
+    ),
 )
 
 PROVIDER_SPECS: Dict[str, ProviderSpec] = {spec.provider: spec for spec in _PROVIDER_SPECS}
 SEARCH_PROVIDER_IDS = tuple(spec.provider for spec in _PROVIDER_SPECS if spec.supports_search)
-# Extraction order matches scripts/extract.py's benchmarked fallback chain.
-EXTRACT_PROVIDER_IDS = ("firecrawl", "linkup", "tavily", "exa", "you")
+# Extraction order matches scripts/extract.py's fallback chain (Tavily-first
+# for reliability, plugin v2.6+ parity; keenable/serper are last-resort).
+EXTRACT_PROVIDER_IDS = ("tavily", "exa", "linkup", "firecrawl", "you", "keenable", "serper")
 DEFAULT_PROVIDER_PRIORITY = (
     "tavily",
     "linkup",
@@ -197,6 +211,8 @@ DEFAULT_PROVIDER_PRIORITY = (
     "serper",
     "you",
     "searxng",
+    # keenable is last: it never displaces a configured keyed provider.
+    "keenable",
     # serpbase is intentionally absent: explicit/fallback-only by design.
 )
 PROVIDER_ENV_KEYS = tuple(spec.env_var for spec in _PROVIDER_SPECS)

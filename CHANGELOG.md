@@ -1,5 +1,39 @@
 # Changelog - Web Search Plus
 
+## [3.3.0] - 2026-07-05
+
+Feature sync with `web-search-plus-plugin` v3.2.0 (hermes-web-search-plus v2.5.0–v2.9.0), adapted for this skill's CLI/filesystem runtime.
+
+### Added
+- **Keenable provider** (search + extraction) using Keenable's independent web index: keyed via `KEENABLE_API_KEY` (`X-API-Key`), or keyless against the **opt-in** public tier (`WSP_KEENABLE_ALLOW_PUBLIC=1` or `"keenable": {"allow_public": true}` in config.json; ~1000 req/hour shared, no SLA, warning in result metadata). Lowest priority in auto routing (score 0, excluded from ties) and extraction fallback so it never displaces a configured keyed provider. (Plugin/hermes v2.6.0)
+- **Unified `--freshness`** (`day`/`week`/`month`/`year`): providers with native date filters (Serper, Brave, Querit, Firecrawl, Keenable, SerpBase, You.com, Perplexity, SearXNG) receive the mapped value; providers without support run the normal search and report `freshness.applied=false` in `metadata.freshness`. Research mode reports per-provider application. (Hermes v2.8.0)
+- **News vertical**: `--type news` on Serper now parses the `news` response field correctly (date, source, thumbnail, position) instead of silently returning zero results; other providers report `search_type.applied=false` in `metadata.search_type`. (Hermes v2.9.0)
+- **Serper extraction**: `scripts/extract.py --provider serper` scrapes pages via Serper's webpage scraper (`https://scrape.serper.dev`, markdown preferred, per-URL error items). It joins the auto-extraction fallback chain in last position. (Hermes v2.9.0)
+- **Tavily-first extraction fallback** (plugin v2.6/v3 parity): auto order is now tavily → exa → linkup → firecrawl → you → keenable → serper (was firecrawl-first).
+- **Configurable search locale defaults** with lightweight query language detection (new `scripts/search_locale.py`): `locale.country` (ISO 3166-1 alpha-2) and `locale.language` (ISO 639-1 or `"auto"`) in config.json — or `WSP_LOCALE_COUNTRY`/`WSP_LOCALE_LANGUAGE` — replace the hardcoded us/en defaults for Serper, Brave, Querit, Firecrawl, You.com, and SearXNG. Explicit `--country`/`--language` CLI flags always win; explicit location hints from a curated city/country table win over config ("mejores restaurantes Madrid" → `es`); `locale.language: "auto"` enables a conservative stopword/character heuristic for de/es/fr/it/pt/nl/en (at least two distinct signals with a single unambiguous winner). Query language never implies the country. `metadata.locale` reports the resolved values and per-value source. Without configuration behavior stays exactly us/en. (Hermes v2.9.0)
+- **Spam/mirror result filtering** (new helpers in `scripts/quality.py`): results from known Stack Overflow/GitHub/documentation mirror domains are removed (strict exact-domain/true-subdomain matching, no look-alike false positives). Operators can extend via `quality.blocked_domains` or rescue via `quality.allowed_domains` in config.json. Domain-diversity reranking caps a single domain at 2 head slots (overflow demoted, not dropped). Explicit domain intent (`site:` queries, `--include-domains`) bypasses both. Removals and demotions are reported in `metadata.result_filter`. (Hermes v2.5.0)
+- **Adaptive provider performance memory** (new `scripts/provider_stats.py`): every provider call records latency/result-count/error into a rolling window (50 samples, 7-day freshness) that feeds bounded (±1.0) routing-score adjustments after 5 fresh samples — enough to break ties and nudge close calls, never enough to override a clear query-class winner. Reported as `routing.adaptive_adjustments`. Skill adaptation: the window is persisted to `provider_stats.json` in the cache directory (0700/0600, atomic writes) because each CLI call is a fresh process; `WSP_DISABLE_CACHE=1` keeps samples process-local. (Hermes v2.5.0)
+
+### Security
+- Extraction SSRF guard extended: CGNAT/shared address space (`100.64.0.0/10`) and IPv4-mapped IPv6 addresses (`::ffff:10.0.0.1`) are now blocked like the other private ranges. (Hermes v2.7.0 parity)
+- Domain boost matching no longer grants authority boosts (or spam-block matches) to look-alike domains that merely contain a trusted domain string (for example `openai.com.evil.example`); label-prefix rules such as `docs.` now match only a leading host label. (Hermes v2.8.0)
+- Inline base64 image data in extracted content is replaced with `[IMAGE: alt]` placeholders before measuring content, preventing data-URI token bombs while preserving normal `http(s)` image links. (Hermes v2.8.0)
+
+### Improved
+- Rate-limit handling: 429 responses parse `Retry-After` (delta-seconds or HTTP-date), retry at most once (short waits ≤30s honored inline), and feed the provider's requested wait into the cooldown ladder (capped at the 1h ladder max) instead of hanging the request. (Hermes v2.5.0)
+- Provider cooldown escalation now decays stale failure history (older than 30 minutes) instead of punishing isolated old failures forever. (Hermes v2.5.0)
+- Provider configuration errors such as missing API keys no longer mark providers unhealthy, trigger cooldowns, or skew the adaptive performance memory; cooldown stays reserved for real provider/network failures. (Hermes v2.7.0)
+- Oversized extracted pages return a head/tail window plus an explanatory footer; the inline budget is configurable via `WSP_EXTRACT_CHAR_LIMIT` or `--extract-char-limit` (default 15000). (Hermes v2.8.0)
+- Provider JSON decode failures now surface as clear transient provider errors, improving retry/fallback behavior. (Hermes v2.8.0)
+- Transient HTTP codes extended from {429, 503} to {408, 425, 429, 500, 502, 503, 504}, matching the plugin's retry classification.
+
+### Not ported
+- The Parallel provider (plugin v3.0.0) remains out of scope for the skill, matching the 3.1.0 parity decision.
+- Plugin-only surfaces (`web_routing_config_plus`, in-memory-only cache/health, onboarding CLI) are host-runtime specific; the skill keeps its CLI flags, config.json, and disk cache equivalents.
+
+### Tests
+- New `tests/test_v33_plugin_sync.py`: freshness/search-type metadata, Serper news parsing, Keenable endpoint/public-tier/tie-exclusion, spam filter + allowlist + look-alike immunity, domain diversity, domain constraints, adaptive stats bounds/staleness, Retry-After parsing, cooldown decay + Retry-After cap, base64 sanitization, head/tail truncation, extraction order, keenable extraction fallback, CGNAT + IPv4-mapped IPv6 SSRF blocks.
+
 ## [3.2.0] - 2026-06-10
 
 Feature sync with `hermes-web-search-plus` v2.3.0/v2.4.0 plus security fixes for the SkillSpector scan findings.

@@ -6,18 +6,32 @@
 
 Unified multi-provider web search and URL extraction for OpenClaw-style agent workflows.
 
-Current version: **3.2.0**
+Current version: **3.3.0**
 
-> **Status: stable & frozen — not the main development path.**
-> This OpenClaw skill is feature-complete on the Web Search Plus engine **v2.4 line** and works as-is. It is **not** where active development happens. New engine features (Keenable, adaptive routing memory, GroktoCrawl-compatible backends, …) land on the actively-developed surfaces: **[hermes-web-search-plus](https://github.com/robbyczgw-cla/hermes-web-search-plus)** (the engine source of truth) and the **[web-search-plus-mcp](https://github.com/robbyczgw-cla/web-search-plus-mcp)** server. No further engine syncs are planned for this OpenClaw build.
+> **Status: stable OpenClaw skill — compatibility path, not the main engine-development path.**
+> This OpenClaw skill is kept usable and periodically synced for OpenClaw users, but active engine development happens on **[hermes-web-search-plus](https://github.com/robbyczgw-cla/hermes-web-search-plus)** and the **[web-search-plus-mcp](https://github.com/robbyczgw-cla/web-search-plus-mcp)** server. Version 3.3.0 syncs the OpenClaw CLI runtime with the Web Search Plus v2.5–v2.9 feature line where those features make sense for a standalone skill.
 
 ## ⚠️ Data handling & privacy
 
-- **Search queries and extraction URLs are sent to the configured third-party providers** (Serper, Brave, Tavily, Linkup, Querit, Exa, Firecrawl, SerpBase, Perplexity via Kilo, You.com, or your SearXNG instance). Each provider's privacy policy and retention rules apply to what you send.
+- **Search queries and extraction URLs are sent to the configured third-party providers** (Serper, Brave, Tavily, Linkup, Querit, Exa, Firecrawl, SerpBase, Keenable, Perplexity via Kilo, You.com, or your SearXNG instance). Each provider's privacy policy and retention rules apply to what you send.
 - **For sensitive queries, pick the provider explicitly** with `--provider <name>` so you control which third party receives them; self-hosted SearXNG keeps queries on your own infrastructure.
 - **Avoid submitting internal/private URLs for extraction** — extraction URLs are forwarded to external services. Private/loopback/link-local targets and cloud metadata endpoints are blocked by default (opt out with `--allow-private-urls` / `WSP_ALLOW_PRIVATE_URLS=1` for trusted private networks).
-- **Local caching is on by default**: queries, results, and provider failure history (including `provider_health.json`) are persisted under `.cache` (or `WSP_CACHE_DIR`) with owner-only permissions (dir `0700`, files `0600`). Use `--no-cache` per call, `WSP_DISABLE_CACHE=1` globally, `--clear-cache` to wipe, `--cache-stats` to inspect.
+- **Local caching is on by default**: queries, results, provider failure history (`provider_health.json`), and provider performance samples for adaptive routing (`provider_stats.json`) are persisted under `.cache` (or `WSP_CACHE_DIR`) with owner-only permissions (dir `0700`, files `0600`). Use `--no-cache` per call, `WSP_DISABLE_CACHE=1` globally, `--clear-cache` to wipe, `--cache-stats` to inspect.
 - **API keys are never logged or cached.**
+
+## What changed in 3.3.0
+
+Feature sync with `web-search-plus-plugin` v3.2.0 (hermes-web-search-plus v2.5.0–v2.9.0), adapted for the skill's CLI runtime:
+
+- **Keenable** search + extraction provider — independent web index, keyed (`KEENABLE_API_KEY`) or keyless via the **opt-in** shared public tier (`WSP_KEENABLE_ALLOW_PUBLIC=1`, ~1000 req/hour, no SLA). Lowest priority everywhere: it never displaces a configured keyed provider.
+- **Unified `--freshness`** (`day`/`week`/`month`/`year`): native date filters where supported, `freshness.applied=false` in metadata otherwise.
+- **News vertical** (`--type news`): Serper serves Google News natively with correct parsing (date, source, thumbnail, position); other providers report `search_type.applied=false`.
+- **Serper extraction** via the `scrape.serper.dev` webpage scraper — last position in the fallback chain, which is now **Tavily-first**: tavily → exa → linkup → firecrawl → you → keenable → serper.
+- **Locale-aware defaults** with lightweight query language detection (`locale.country`/`locale.language` in config, `WSP_LOCALE_COUNTRY`/`WSP_LOCALE_LANGUAGE`, `"auto"` language inference, curated location hints — "mejores restaurantes Madrid" → `es`).
+- **Spam/mirror result filtering** (strict domain matching, `quality.blocked_domains`/`quality.allowed_domains`), **domain-diversity reranking** (max 2 head slots per domain), `site:`/`--include-domains` bypass, reported via `metadata.result_filter`.
+- **Adaptive provider performance memory**: rolling latency/result/error window (persisted as `provider_stats.json`) feeding bounded ±1.0 routing-score adjustments (`routing.adaptive_adjustments`).
+- **Robustness**: `Retry-After` parsing with a single bounded inline retry for 429s, cooldown ladder decay after 30 minutes, configuration errors no longer trigger cooldowns, JSON decode failures surface as provider errors; transient HTTP codes now include 408/425/500/502/504.
+- **Security**: extraction SSRF guard extended (CGNAT `100.64/10`, IPv4-mapped IPv6); look-alike domains no longer inherit authority boosts; inline base64 images replaced with `[IMAGE: alt]` placeholders; oversized extractions truncate to a head/tail window (`WSP_EXTRACT_CHAR_LIMIT`, default 15000).
 
 ## What changed in 3.2.0
 
@@ -53,18 +67,21 @@ Current version: **3.2.0**
 - **You.com** — current-web / RAG-ish queries
 - **SearXNG** — privacy-first self-hosted metasearch
 - **SerpBase** — low-cost Google SERP, prepaid credits, **explicit/fallback-only**
+- **Keenable** — independent web index, keyed or opt-in keyless public tier, lowest priority
 
 ## Extraction providers
 
-`scripts/extract.py` supports:
+`scripts/extract.py` supports (auto order, Tavily-first):
 
-- Firecrawl
-- Linkup
 - Tavily
 - Exa
+- Linkup
+- Firecrawl
 - You.com
+- Keenable
+- Serper (webpage scraper)
 
-Auto extraction tries them in that order and falls back when a provider is unconfigured or fails.
+Auto extraction tries them in that order and falls back when a provider is unconfigured or fails. Oversized pages are truncated to a head/tail window (default 15,000 chars, `WSP_EXTRACT_CHAR_LIMIT`); inline base64 images become `[IMAGE: alt]` placeholders.
 
 ## Quick start
 
@@ -123,7 +140,7 @@ Research providers run concurrently (wall-clock ≈ slowest provider); result or
 
 ## Caching
 
-Results are cached under `.cache` (override with `WSP_CACHE_DIR`) for 1 hour by default; provider failure history lives in `.cache/provider_health.json`. The directory is created `0700` and files `0600`.
+Results are cached under `.cache` (override with `WSP_CACHE_DIR`) for 1 hour by default; provider failure history lives in `.cache/provider_health.json` and adaptive-routing performance samples in `.cache/provider_stats.json`. The directory is created `0700` and files `0600`.
 
 ```bash
 python3 scripts/search.py -q "..." --no-cache    # bypass for one call

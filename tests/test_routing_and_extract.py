@@ -73,20 +73,20 @@ class ExtractTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {}, clear=True):
             result = extract.extract_plus(["https://example.com"], provider="auto")
         self.assertEqual(result["error"], "All extraction providers failed")
-        self.assertEqual(result["fallback_errors"][0]["provider"], "firecrawl")
+        self.assertEqual(result["fallback_errors"][0]["provider"], "tavily")
         self.assertEqual(result["fallback_errors"][0]["error"], "missing_api_key")
 
     def test_auto_fallback_uses_next_provider_after_failure(self):
-        with mock.patch.dict(os.environ, {"FIRECRAWL_API_KEY": "fire", "LINKUP_API_KEY": "link"}, clear=True):
-            with mock.patch.object(extract, "extract_firecrawl", side_effect=RuntimeError("boom")):
-                with mock.patch.object(extract, "extract_linkup", return_value={
-                    "provider": "linkup",
-                    "results": [{"url": "https://example.com", "title": "Example", "content": "ok", "raw_content": "ok", "provider": "linkup"}],
+        with mock.patch.dict(os.environ, {"TAVILY_API_KEY": "tavi-key", "EXA_API_KEY": "exa-key"}, clear=True):
+            with mock.patch.object(extract, "extract_tavily", side_effect=RuntimeError("boom")):
+                with mock.patch.object(extract, "extract_exa", return_value={
+                    "provider": "exa",
+                    "results": [{"url": "https://example.com", "title": "Example", "content": "ok", "raw_content": "ok", "provider": "exa"}],
                 }):
                     result = extract.extract_plus(["https://example.com"], provider="auto")
-        self.assertEqual(result["provider"], "linkup")
+        self.assertEqual(result["provider"], "exa")
         self.assertTrue(result["routing"]["fallback_used"])
-        self.assertEqual(result["routing"]["fallback_errors"][0]["provider"], "firecrawl")
+        self.assertEqual(result["routing"]["fallback_errors"][0]["provider"], "tavily")
 
 
 if __name__ == "__main__":
