@@ -79,7 +79,7 @@
   },
   "serpbase": {
     "$comment": "SerpBase is explicit/fallback-only. To include in auto-routing, append 'serpbase' to auto_routing.provider_priority.",
-    "api_url": "https://api.serpbase.com/search",
+    "api_url": "https://api.serpbase.dev/google/search",
     "timeout": 30
   },
   "keenable": {
