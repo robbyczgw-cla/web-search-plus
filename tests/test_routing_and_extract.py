@@ -22,7 +22,6 @@ class RoutingParityTests(unittest.TestCase):
                     "querit",
                     "exa",
                     "firecrawl",
-                    "perplexity",
                     "brave",
                     "serper",
                     "you",
@@ -37,7 +36,6 @@ class RoutingParityTests(unittest.TestCase):
             "linkup": {"api_key": "x"},
             "exa": {"api_key": "x"},
             "firecrawl": {"api_key": "x"},
-            "perplexity": {"api_key": "x"},
             "you": {"api_key": "x"},
             "searxng": {},
         }
@@ -50,11 +48,11 @@ class RoutingParityTests(unittest.TestCase):
     def test_multilingual_recency_query_scores_querit_signal(self):
         routed = self.make_analyzer().route("latest AI policy updates in Germany")
         self.assertGreater(routed["scores"]["querit"], 0)
-        self.assertIn(routed["provider"], {"serper", "brave", "perplexity", "querit", "tavily"})
+        self.assertIn(routed["provider"], {"serper", "brave", "querit", "tavily"})
 
     def test_generic_current_web_query_uses_brave_or_serper(self):
         routed = self.make_analyzer().route("weather in Vienna today")
-        self.assertIn(routed["provider"], {"brave", "serper", "perplexity"})
+        self.assertIn(routed["provider"], {"brave", "serper"})
 
     def test_tie_breaker_is_deterministic(self):
         winners = ["brave", "serper"]

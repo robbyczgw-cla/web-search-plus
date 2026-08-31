@@ -92,10 +92,10 @@ def print_provider_info():
         {
             "name": "Exa",
             "emoji": "🧠",
-            "best_for": "Semantic search, discovery, deep and deep-reasoning modes",
+            "best_for": "Semantic search and similar-site discovery",
             "free_tier": "1,000 queries/month",
             "signup": "https://exa.ai",
-            "strengths": ["Semantic discovery", "Similar pages", "Deep synthesis"]
+            "strengths": ["Semantic discovery", "Similar pages", "Source URLs"]
         },
         {
             "name": "Firecrawl",
@@ -104,14 +104,6 @@ def print_provider_info():
             "free_tier": "Free plan credits",
             "signup": "https://www.firecrawl.dev/app/api-keys",
             "strengths": ["Search + scrape metadata", "Recency filters", "Great extraction fallback"]
-        },
-        {
-            "name": "Perplexity via Kilo",
-            "emoji": "⚡",
-            "best_for": "Direct answers with citations",
-            "free_tier": "Depends on Kilo plan",
-            "signup": "https://kilo.ai",
-            "strengths": ["Answer-first output", "Current status questions", "Citation support"]
         },
         {
             "name": "You.com",
@@ -339,7 +331,6 @@ def run_setup(skill_dir: Path, force_reset: bool = False):
             "linkup": {},
             "exa": {},
             "firecrawl": {},
-            "perplexity": {},
             "you": {},
             "searxng": {},
             "serpbase": {},
@@ -347,7 +338,7 @@ def run_setup(skill_dir: Path, force_reset: bool = False):
         }
 
     # Remove any existing API keys from example
-    for provider in ["serper", "brave", "tavily", "querit", "linkup", "exa", "firecrawl", "perplexity", "you", "serpbase", "keenable"]:
+    for provider in ["serper", "brave", "tavily", "querit", "linkup", "exa", "firecrawl", "you", "serpbase", "keenable"]:
         if provider in config:
             config[provider].pop("api_key", None)
 
@@ -368,7 +359,6 @@ def run_setup(skill_dir: Path, force_reset: bool = False):
         "linkup": ("Linkup", "https://linkup.so", "Citation and source-grounded search"),
         "exa": ("Exa", "https://exa.ai", "Semantic search, discovery, deep synthesis"),
         "firecrawl": ("Firecrawl", "https://www.firecrawl.dev/app/api-keys", "Search with scrape-ready metadata"),
-        "perplexity": ("Perplexity via Kilo", "https://kilo.ai", "Direct answers with citations"),
         "you": ("You.com", "https://api.you.com", "RAG applications, real-time info"),
         "searxng": ("SearXNG", "https://docs.searxng.org/admin/installation.html", "Privacy-first, self-hosted, $0 cost"),
         "serpbase": ("SerpBase", "https://serpbase.dev", "Low-cost Google SERP, prepaid credits (explicit/fallback-only)"),
@@ -449,7 +439,7 @@ def run_setup(skill_dir: Path, force_reset: bool = False):
     config["defaults"]["max_results"] = max_results
 
     # Set disabled providers (serpbase is excluded from default auto-routing — opt-in only)
-    all_providers = ["serper", "brave", "tavily", "querit", "linkup", "exa", "firecrawl", "perplexity", "you", "searxng", "serpbase", "keenable"]
+    all_providers = ["serper", "brave", "tavily", "querit", "linkup", "exa", "firecrawl", "you", "searxng", "serpbase", "keenable"]
     disabled = [p for p in all_providers if p not in enabled_providers]
     config["auto_routing"]["disabled_providers"] = disabled
 

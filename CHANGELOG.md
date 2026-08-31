@@ -1,5 +1,16 @@
 # Changelog - Web Search Plus
 
+## [4.0.0] - 2026-08-31
+
+Source-only skill release. Not a port of OpenClaw plugin 4.0.3.
+
+### Breaking
+- **Removed Perplexity / Kilo Gateway.** The skill no longer calls `api.kilo.ai`, no longer reads `PERPLEXITY_API_KEY` / `KILOCODE_API_KEY`, and no longer routes or auto-completes `-p perplexity`. Leftover config keys are ignored.
+- Public output stays ranked source URLs and extracted page text. Model-written answers are out of scope.
+
+### Not in this release
+- DonSeTch, Parallel, Octen, and TinyFish stay on the native plugin (`web-search-plus-plugin-v2`), not this CLI skill.
+
 ## [3.3.0] - 2026-07-05
 
 Feature sync with `web-search-plus-plugin` v3.2.0 (hermes-web-search-plus v2.5.0–v2.9.0), adapted for this skill's CLI/filesystem runtime.

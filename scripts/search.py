@@ -2,7 +2,7 @@
 """
 Web Search Plus — Unified Multi-Provider Search with Intelligent Auto-Routing
 Supports: Serper (Google), Brave Search, Tavily (Research), Querit (Multilingual AI Search),
-Exa (Neural), Perplexity (Direct Answers)
+Exa (Neural). Source-only: ranked links, not model-written answers.
 
 Smart Routing uses multi-signal analysis:
   - Query intent classification (shopping, research, discovery)
@@ -362,7 +362,7 @@ DEFAULT_CONFIG = {
     "auto_routing": {
         "enabled": True,
         "fallback_provider": "serper",
-        "provider_priority": ["tavily", "linkup", "querit", "exa", "firecrawl", "perplexity", "brave", "serper", "you", "searxng", "keenable"],
+        "provider_priority": ["tavily", "linkup", "querit", "exa", "firecrawl", "brave", "serper", "you", "searxng", "keenable"],
         # Note: "serpbase" is intentionally NOT in default auto-routing priority — it is explicit/fallback-only.
         # Use --provider serpbase OR add it to provider_priority in config.json to opt-in.
         "disabled_providers": [],
@@ -397,10 +397,6 @@ DEFAULT_CONFIG = {
         "type": "neural",
         "depth": "normal",
         "verbosity": "standard"
-    },
-    "perplexity": {
-        "api_url": "https://api.kilo.ai/api/gateway/chat/completions",
-        "model": "perplexity/sonar-pro"
     },
     "firecrawl": {
         "api_url": "https://api.firecrawl.dev/v2/search",
@@ -474,6 +470,9 @@ def get_api_key(provider: str, config: Dict[str, Any] = None) -> Optional[str]:
     
     Note: SearXNG doesn't require an API key, but returns instance_url if configured.
     """
+    if provider not in provider_registry.PROVIDER_SPECS:
+        return None
+
     # Special case: SearXNG uses instance_url instead of API key
     if provider == "searxng":
         return get_searxng_instance_url(config)
@@ -486,8 +485,10 @@ def get_api_key(provider: str, config: Dict[str, Any] = None) -> Optional[str]:
             if key:
                 return key
     
+    if provider not in provider_registry.PROVIDER_SPECS:
+        return None
     # Then check environment (ProviderSpec registry is the single source of truth
-    # for env var names; perplexity also accepts its Kilo gateway alternative)
+    # for env var names)
     spec = provider_registry.PROVIDER_SPECS.get(provider)
     if not spec:
         return None
@@ -987,7 +988,7 @@ class QueryAnalyzer:
         r'\bsituation (in|with|around)\b': 3.5,
     }
     
-    # Direct answer / synthesis signals → Perplexity via Kilo Gateway
+    # Direct-answer phrasing still informs recency/research routing; it no longer maps to a synthesis provider.
     DIRECT_ANSWER_SIGNALS = {
         r'\bwhat is\b': 3.0,
         r'\bwhat are\b': 2.5,
@@ -1375,8 +1376,7 @@ class QueryAnalyzer:
             "querit": (research_score * 0.65) + (rag_score * 0.35) + (recency_score * 0.45),
             "linkup": linkup_source_score + (rag_score * 0.7) + (research_score * 0.45) + (recency_score * 0.35),
             "exa": discovery_score + (1.0 if re.search(r"\b(similar|alternatives?|examples?)\b", query, re.IGNORECASE) else 0.0) + (exa_deep_score * 0.5) + (exa_deep_reasoning_score * 0.5),
-            "perplexity": direct_answer_score + (local_news_score * 0.4) + (recency_score * 0.55),
-            "you": rag_score + (recency_score * 0.25),  # You.com good for real-time + RAG
+                        "you": rag_score + (recency_score * 0.25),  # You.com good for real-time + RAG
             "searxng": privacy_score,  # SearXNG for privacy/multi-source queries
             "firecrawl": discovery_score + (research_score * 0.35) + (recency_score * 0.25),
             # Keenable is a last-resort fallback: no query-class signals boost it.
@@ -1391,8 +1391,7 @@ class QueryAnalyzer:
             "querit": research_matches,
             "linkup": linkup_source_matches + rag_matches + research_matches,
             "exa": discovery_matches + exa_deep_matches + exa_deep_reasoning_matches,
-            "perplexity": direct_answer_matches,
-            "you": rag_matches,
+                        "you": rag_matches,
             "searxng": privacy_matches,
             "firecrawl": discovery_matches + research_matches,
             "keenable": [],
@@ -1589,7 +1588,7 @@ def explain_routing(query: str, config: Dict[str, Any]) -> Dict[str, Any]:
             if matches
         },
         "available_providers": [
-            p for p in ["serper", "brave", "tavily", "linkup", "querit", "exa", "firecrawl", "perplexity", "you", "searxng", "keenable"]
+            p for p in ["serper", "brave", "tavily", "linkup", "querit", "exa", "firecrawl", "you", "searxng", "keenable"]
             if provider_is_configured(p, config) and p not in config.get("auto_routing", {}).get("disabled_providers", [])
         ]
     }
@@ -1616,7 +1615,6 @@ PROVIDER_FRESHNESS_FORMATS = {
     "keenable": {"day": "1d", "week": "7d", "month": "1mo", "year": "1y"},
     "serpbase": {"day": "day", "week": "week", "month": "month", "year": "year"},
     "you": {"day": "day", "week": "week", "month": "month", "year": "year"},
-    "perplexity": {"day": "day", "week": "week", "month": "month", "year": "year"},
     "searxng": {"day": "day", "week": "week", "month": "month", "year": "year"},
 }
 
@@ -2641,109 +2639,6 @@ def search_exa(
 
 
 # =============================================================================
-# Perplexity via Kilo Gateway (Synthesized Direct Answers)
-# =============================================================================
-
-def search_perplexity(
-    query: str,
-    api_key: str,
-    max_results: int = 5,
-    model: str = "perplexity/sonar-pro",
-    api_url: str = "https://api.kilo.ai/api/gateway/chat/completions",
-    freshness: Optional[str] = None,
-) -> dict:
-    """Search/answer using Perplexity Sonar Pro via Kilo Gateway.
-
-    Args:
-        query: Search query
-        api_key: Kilo Gateway API key
-        max_results: Maximum results to return
-        model: Perplexity model to use
-        api_url: Kilo Gateway endpoint
-        freshness: Filter by recency — 'day', 'week', 'month', 'year' (maps to
-                   Perplexity's search_recency_filter parameter)
-    """
-    # Map generic freshness values to Perplexity's search_recency_filter
-    recency_map = {"day": "day", "pd": "day", "week": "week", "pw": "week", "month": "month", "pm": "month", "year": "year", "py": "year"}
-    recency_filter = recency_map.get(freshness or "", None)
-
-    body = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": "Answer with concise factual summary and include source URLs."},
-            {"role": "user", "content": query},
-        ],
-        "temperature": 0.2,
-    }
-    if recency_filter:
-        body["search_recency_filter"] = recency_filter
-
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-
-    data = make_request(api_url, headers, body)
-    choices = data.get("choices", [])
-    message = choices[0].get("message", {}) if choices else {}
-    answer = (message.get("content") or "").strip()
-
-    # Prefer the structured citations array from Perplexity API response
-    api_citations = data.get("citations", [])
-
-    # Fallback: extract URLs from answer text if API doesn't provide citations
-    if not api_citations:
-        api_citations = []
-        seen = set()
-        for u in re.findall(r"https?://[^\s)\]}>\"']+", answer):
-            if u not in seen:
-                seen.add(u)
-                api_citations.append(u)
-
-    results = []
-
-    # Primary result: the synthesized answer itself
-    if answer:
-        # Clean citation markers [1][2] for the snippet
-        clean_answer = re.sub(r'\[\d+\]', '', answer).strip()
-        results.append({
-            "title": f"Perplexity Answer: {query[:80]}",
-            "url": "https://www.perplexity.ai",
-            "snippet": clean_answer[:500],
-            "score": 1.0,
-        })
-
-    # Source results from citations
-    for i, citation in enumerate(api_citations[:max_results - 1]):
-        # citations can be plain URL strings or dicts with url/title
-        if isinstance(citation, str):
-            url = citation
-            title = _title_from_url(url)
-        else:
-            url = citation.get("url", "")
-            title = citation.get("title") or _title_from_url(url)
-        results.append({
-            "title": title,
-            "url": url,
-            "snippet": f"Source cited in Perplexity answer [citation {i+1}]",
-            "score": round(0.9 - i * 0.1, 3),
-        })
-
-    return {
-        "provider": "perplexity",
-        "query": query,
-        "results": results,
-        "images": [],
-        "answer": answer,
-        "metadata": {
-            "model": model,
-            "usage": data.get("usage", {}),
-        }
-    }
-
-
-
-# =============================================================================
 # You.com (LLM-Ready Web & News Search)
 # =============================================================================
 
@@ -3265,9 +3160,6 @@ Intelligent Auto-Routing:
   Discovery Intent → Exa (Neural)
     "similar to", "companies like", "alternatives", URLs, startups, papers
 
-  Direct Answer Intent → Perplexity (via Kilo Gateway)
-    "what is", "current status", local events, synthesized up-to-date answers
-
 Examples:
   python3 search.py -q "iPhone 16 Pro Max price"          # → Serper (shopping)
   python3 search.py -q "how does HTTPS encryption work"   # → Tavily (research)
@@ -3742,16 +3634,6 @@ Full docs: See README.md and SKILL.md
                 ignore_invalid_urls=firecrawl_config.get("ignore_invalid_urls", False),
                 api_url=firecrawl_config.get("api_url", "https://api.firecrawl.dev/v2/search"),
                 timeout_ms=int(firecrawl_config.get("timeout", 30000)),
-            )
-        elif prov == "perplexity":
-            perplexity_config = config.get("perplexity", {})
-            return search_perplexity(
-                query=args.query,
-                api_key=key,
-                max_results=args.max_results,
-                model=perplexity_config.get("model", "perplexity/sonar-pro"),
-                api_url=perplexity_config.get("api_url", "https://api.kilo.ai/api/gateway/chat/completions"),
-                freshness=getattr(args, "freshness", None),
             )
         elif prov == "you":
             return search_you(
