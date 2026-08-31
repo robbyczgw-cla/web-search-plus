@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Web Search Plus v3.3.0 example config — search routing plus extraction-capable provider settings (incl. opt-in SerpBase and Keenable)",
+  "$comment": "Web Search Plus v4.0.0 example config — source-only search routing plus extraction-capable provider settings (incl. opt-in SerpBase and Keenable)",
   "defaults": {
     "provider": "serper",
     "max_results": 5
@@ -14,7 +14,6 @@
       "querit",
       "exa",
       "firecrawl",
-      "perplexity",
       "brave",
       "serper",
       "you",
@@ -62,10 +61,6 @@
       "web"
     ],
     "ignore_invalid_urls": false
-  },
-  "perplexity": {
-    "api_url": "https://api.kilo.ai/api/gateway/chat/completions",
-    "model": "perplexity/sonar-pro"
   },
   "you": {
     "country": "us",

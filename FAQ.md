@@ -63,8 +63,6 @@ Any one of these is enough for search:
 - `LINKUP_API_KEY`
 - `EXA_API_KEY`
 - `FIRECRAWL_API_KEY`
-- `PERPLEXITY_API_KEY`
-- `KILOCODE_API_KEY`
 - `YOU_API_KEY`
 - `SEARXNG_INSTANCE_URL`
 
@@ -85,8 +83,6 @@ Extraction needs one of:
 - Linkup: <https://linkup.so>
 - Exa: <https://exa.ai>
 - Firecrawl: <https://firecrawl.dev>
-- Perplexity: <https://www.perplexity.ai/settings/api>
-- Kilo gateway: <https://kilo.ai>
 - You.com: <https://api.you.com>
 - SearXNG: <https://docs.searxng.org/admin/installation.html>
 

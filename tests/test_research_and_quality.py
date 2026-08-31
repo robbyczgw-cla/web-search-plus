@@ -42,7 +42,7 @@ class ProviderRegistryTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"TAVILY_API_KEY": "tvly-test"}, clear=True):
             self.assertEqual(search.get_api_key("tavily"), "tvly-test")
         with mock.patch.dict(os.environ, {"KILOCODE_API_KEY": "kilo-test"}, clear=True):
-            self.assertEqual(search.get_api_key("perplexity"), "kilo-test")
+            self.assertIsNone(search.get_api_key("perplexity"))
 
 
 class RetryJitterTests(unittest.TestCase):
