@@ -67,14 +67,16 @@ class ExtractTests(unittest.TestCase):
         result = extract.extract_plus(["example.com"], provider="auto")
         self.assertIn("Invalid URL", result["error"])
 
-    def test_missing_keys_reported(self):
+    @mock.patch.object(extract, "validate_outbound_url", side_effect=lambda url, **kwargs: url)
+    def test_missing_keys_reported(self, _validate_url):
         with mock.patch.dict(os.environ, {}, clear=True):
             result = extract.extract_plus(["https://example.com"], provider="auto")
         self.assertEqual(result["error"], "All extraction providers failed")
         self.assertEqual(result["fallback_errors"][0]["provider"], "tavily")
         self.assertEqual(result["fallback_errors"][0]["error"], "missing_api_key")
 
-    def test_auto_fallback_uses_next_provider_after_failure(self):
+    @mock.patch.object(extract, "validate_outbound_url", side_effect=lambda url, **kwargs: url)
+    def test_auto_fallback_uses_next_provider_after_failure(self, _validate_url):
         with mock.patch.dict(os.environ, {"TAVILY_API_KEY": "tavi-key", "EXA_API_KEY": "exa-key"}, clear=True):
             with mock.patch.object(extract, "extract_tavily", side_effect=RuntimeError("boom")):
                 with mock.patch.object(extract, "extract_exa", return_value={

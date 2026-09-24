@@ -18,7 +18,7 @@ class FreshnessSearchTypeTests(unittest.TestCase):
         self.assertEqual(meta["native_value"], "qdr:w")
 
     def test_freshness_not_applied_for_unsupported_provider(self):
-        meta = search.freshness_metadata("tavily", "week")
+        meta = search.freshness_metadata("linkup", "week")
         self.assertFalse(meta["applied"])
         self.assertIn("reason", meta)
 
@@ -222,7 +222,8 @@ class ExtractTruncationTests(unittest.TestCase):
         self.assertEqual(extract.EXTRACT_PROVIDER_PRIORITY[-1], "serper")
         self.assertIn("keenable", extract.EXTRACT_PROVIDER_PRIORITY)
 
-    def test_extract_plus_truncates_oversized_content(self):
+    @mock.patch.object(extract, "validate_outbound_url", side_effect=lambda url, **kwargs: url)
+    def test_extract_plus_truncates_oversized_content(self, _validate_url):
         big = "y" * 40000
         with mock.patch.dict(os.environ, {"TAVILY_API_KEY": "tavi-key"}, clear=True):
             with mock.patch.object(extract, "extract_tavily", return_value={
@@ -235,7 +236,8 @@ class ExtractTruncationTests(unittest.TestCase):
         self.assertEqual(item["original_chars"], 40000)
         self.assertLess(len(item["content"]), 20000)
 
-    def test_keenable_public_tier_used_in_extract_fallback(self):
+    @mock.patch.object(extract, "validate_outbound_url", side_effect=lambda url, **kwargs: url)
+    def test_keenable_public_tier_used_in_extract_fallback(self, _validate_url):
         with mock.patch.dict(os.environ, {"WSP_KEENABLE_ALLOW_PUBLIC": "1"}, clear=True):
             with mock.patch.object(extract, "extract_keenable", return_value={
                 "provider": "keenable",

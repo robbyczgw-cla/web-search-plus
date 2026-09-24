@@ -1,9 +1,9 @@
 ---
 name: web-search-plus
-version: 4.0.0
-description: Unified multi-provider web search and URL extraction skill with intelligent auto-routing across Serper, Brave, Tavily, Querit, Linkup, Exa, Firecrawl, You.com, SearXNG, SerpBase, and Keenable. Unified freshness/news filters, locale-aware defaults, spam/mirror filtering, and adaptive routing. Sends queries/URLs to the configured third-party provider APIs and caches results plus provider failure/performance history locally under .cache (configurable, can be disabled).
+version: 4.3.1
+description: Search the web and extract URLs with routing across Serper, Brave, Tavily, Querit, Linkup, Exa, Firecrawl, You.com, SearXNG, SerpBase, and Keenable. Returns ranked sources and page text; supports freshness filters and research across providers.
 tags: [search, keenable, news, locale, web-search, web-extract, serper, brave, tavily, querit, linkup, exa, firecrawl, you, searxng, serpbase, google, multilingual-search, research, semantic-search, auto-routing, multi-provider, shopping, rag, free-tier, privacy, self-hosted]
-metadata: {"openclaw":{"requires":{"bins":["python3","bash"],"env":{"SERPER_API_KEY":"optional","BRAVE_API_KEY":"optional","TAVILY_API_KEY":"optional","QUERIT_API_KEY":"optional","LINKUP_API_KEY":"optional","EXA_API_KEY":"optional","FIRECRAWL_API_KEY":"optional","YOU_API_KEY":"optional","SEARXNG_INSTANCE_URL":"optional","SERPBASE_API_KEY":"optional — explicit/fallback-only Google SERP provider with prepaid credits","KEENABLE_API_KEY":"optional — Keenable independent web index (search + extraction); keyless public tier opt-in via WSP_KEENABLE_ALLOW_PUBLIC=1"},"note":"Only ONE provider key or SEARXNG_INSTANCE_URL is needed for search. Extraction requires one of Firecrawl, Linkup, Tavily, Exa, or You.com.","permissions":{"network":"outbound HTTPS to the configured provider API hosts only (google.serper.dev, api.search.brave.com, api.tavily.com, api.querit.ai, api.linkup.so, api.exa.ai, api.firecrawl.dev, ydc-index.io, api.serpbase.com, api.keenable.ai, scrape.serper.dev, plus any user-configured SearXNG instance)","env":"reads provider *_API_KEY vars, SEARXNG_INSTANCE_URL, SEARXNG_ALLOW_PRIVATE, and WSP_* settings (WSP_CACHE_DIR, WSP_DISABLE_CACHE, WSP_ALLOW_PRIVATE_URLS, WSP_KEENABLE_ALLOW_PUBLIC, WSP_EXTRACT_CHAR_LIMIT, WSP_LOCALE_COUNTRY, WSP_LOCALE_LANGUAGE)","filesystem":"writes only to the cache directory (.cache by default, WSP_CACHE_DIR override): cached search results, provider_health.json, and provider_stats.json (adaptive routing performance samples)"}}}
+metadata: {"openclaw":{"requires":{"bins":["python3","bash"],"env":{"SERPER_API_KEY":"optional","BRAVE_API_KEY":"optional","TAVILY_API_KEY":"optional","QUERIT_API_KEY":"optional","LINKUP_API_KEY":"optional","EXA_API_KEY":"optional","FIRECRAWL_API_KEY":"optional","YOU_API_KEY":"optional","SEARXNG_INSTANCE_URL":"optional","SERPBASE_API_KEY":"optional — explicit/fallback-only Google SERP provider with prepaid credits","KEENABLE_API_KEY":"optional — Keenable independent web index (search + extraction); keyless public tier opt-in via WSP_KEENABLE_ALLOW_PUBLIC=1"},"note":"Only ONE provider key or SEARXNG_INSTANCE_URL is needed for search. Extraction requires one of Firecrawl, Linkup, Tavily, Exa, or You.com.","permissions":{"network":"outbound HTTPS to the configured provider API hosts only (google.serper.dev, api.search.brave.com, api.tavily.com, api.querit.ai, api.linkup.so, api.exa.ai, api.firecrawl.dev, ydc-index.io, api.serpbase.com, api.keenable.ai, scrape.serper.dev, plus any user-configured SearXNG instance)","env":"reads provider *_API_KEY vars, SEARXNG_INSTANCE_URL, SEARXNG_ALLOW_PRIVATE, and WSP_* settings (WSP_CACHE_DIR, WSP_DISABLE_CACHE, WSP_ALLOW_PRIVATE_URLS, WSP_KEENABLE_ALLOW_PUBLIC, WSP_EXTRACT_CHAR_LIMIT, WSP_LOCALE_COUNTRY, WSP_LOCALE_LANGUAGE, WSP_HTTP_KEEPALIVE)","filesystem":"writes only to the cache directory (.cache by default, WSP_CACHE_DIR override): cached search results, provider_health.json, and provider_stats.json (adaptive routing performance samples)"}}}}
 ---
 
 # Web Search Plus
@@ -137,6 +137,12 @@ Debug routing:
 ```bash
 python3 scripts/search.py --explain-routing -q "your query"
 ```
+
+Queries starting with a dash can use `--query=-foo` or `-q -- "-foo"`. When `-n` is omitted, `defaults.max_results` supplies the count (fallback 5); counts are clamped to 1–20.
+
+`--time-range` takes precedence over `--freshness`. Tavily sends day/week/month/year as native `time_range`; Exa reports the publication bounds sent with the request.
+
+`--cache-ttl SECONDS` sets the search-cache lifetime, capped at 60 seconds for live/hour queries, 300 seconds for latest/day, and 1800 seconds for week filters. Cached results include `cache_age_seconds`. `--no-cache` bypasses search-result caching. Set `WSP_HTTP_KEEPALIVE=0` to disable connection reuse; requests through proxies use the standard transport.
 
 ### Freshness, news vertical & locale
 

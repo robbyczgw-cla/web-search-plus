@@ -1,5 +1,18 @@
 # Changelog - Web Search Plus
 
+## [4.3.1] - 2026-09-24
+
+Ported applicable Hermes runtime changes into the source-only CLI:
+
+- Preserve leading dashes and literal `--` in query arguments (`4400fc9`).
+- Prefer Exa highlights, send Tavily native date filters, and reuse Exa request dates in normal, cached, and research receipts (`55d4d08`). Explicit date bounds have separate cache keys.
+- Cap search-cache TTL by recency and effective date filter; retain `--cache-ttl`, `--no-cache`, and cache-age output (`33f415e`, `90e9c3a`).
+- Record each search-provider attempt, including retries and research members. Exclude cache hits and configuration errors. Lock statistics updates across POSIX processes, with thread-only fallback when `fcntl` is unavailable (`9bd7d36`).
+- Keep configured default counts and explicit-count precedence; clamp counts to 1–20 (`0345748` release line).
+- Share keep-alive connections across search and extraction calls. Bypass pooling for proxies or `WSP_HTTP_KEEPALIVE=0`; retry stale pooled sockets once (`c6da1e3`).
+
+Skipped: semantic spans and `spans_query`, plugin request adapters, budget guards, provider SDK cleanup, research span ranking, Jev, Parallel, DonSeTch, Hermes native backend and desktop settings. These have no matching runtime here. No providers or dependencies were added.
+
 ## [4.0.0] - 2026-08-31
 
 Source-only skill release. Not a port of OpenClaw plugin 4.0.3.
