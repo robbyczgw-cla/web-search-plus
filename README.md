@@ -6,10 +6,10 @@
 
 Unified multi-provider web search and URL extraction for OpenClaw-style agent workflows.
 
-Current version: **4.0.0**
+Current version: **4.3.1**
 
 > **Status: stable OpenClaw skill — compatibility path, not the main engine-development path.**
-> This OpenClaw skill is kept usable and periodically synced for OpenClaw users, but active engine development happens on **[hermes-web-search-plus](https://github.com/robbyczgw-cla/hermes-web-search-plus)** and the **[web-search-plus-mcp](https://github.com/robbyczgw-cla/web-search-plus-mcp)** server. Version 4.0.0 keeps that CLI compatibility path and makes it **source-only**: Perplexity/Kilo answer synthesis is gone. The native OpenClaw plugin remains `web-search-plus-plugin-v2` (currently 4.0.3).
+> This OpenClaw skill is kept usable and periodically synced for OpenClaw users, but active engine development happens on **[hermes-web-search-plus](https://github.com/robbyczgw-cla/hermes-web-search-plus)** and the **[web-search-plus-mcp](https://github.com/robbyczgw-cla/web-search-plus-mcp)** server. Version 4.3.1 syncs applicable runtime fixes while keeping this CLI **source-only**. The native OpenClaw plugin remains `web-search-plus-plugin-v2` (currently 4.3.1).
 
 ## ⚠️ Data handling & privacy
 
@@ -18,6 +18,16 @@ Current version: **4.0.0**
 - **Avoid submitting internal/private URLs for extraction** — extraction URLs are forwarded to external services. Private/loopback/link-local targets and cloud metadata endpoints are blocked by default (opt out with `--allow-private-urls` / `WSP_ALLOW_PRIVATE_URLS=1` for trusted private networks).
 - **Local caching is on by default**: queries, results, provider failure history (`provider_health.json`), and provider performance samples for adaptive routing (`provider_stats.json`) are persisted under `.cache` (or `WSP_CACHE_DIR`) with owner-only permissions (dir `0700`, files `0600`). Use `--no-cache` per call, `WSP_DISABLE_CACHE=1` globally, `--clear-cache` to wipe, `--cache-stats` to inspect.
 - **API keys are never logged or cached.**
+
+## What changed in 4.3.1
+
+- Queries starting with a dash reach providers unchanged: use `--query=-foo` or `-q -- "-foo"`.
+- Exa snippets prefer highlights. Tavily receives native date filters, and Exa receipts reuse the publication bounds sent with each request, including research mode. `--time-range` wins over `--freshness`.
+- `--cache-ttl SECONDS` now respects recency caps: live/hour 60 seconds, latest/day 300 seconds, week filters 1800 seconds. Cache hits include their age.
+- Adaptive routing records every search-provider attempt, including retries and research members. POSIX file locking prevents concurrent writers from losing samples.
+- Omitted counts use `defaults.max_results`; explicit `-n` wins. Both are clamped to 1–20.
+- Search and extraction reuse HTTP connections per host within a process. Proxies and `WSP_HTTP_KEEPALIVE=0` use the standard transport. A stale pooled socket gets one retry on a fresh connection.
+- The provider list stays unchanged. Jev, Parallel, DonSeTch, Hermes native backends and desktop settings remain outside this skill.
 
 ## What changed in 4.0.0
 
@@ -145,14 +155,17 @@ Research providers run concurrently (wall-clock ≈ slowest provider); result or
 
 ## Caching
 
-Results are cached under `.cache` (override with `WSP_CACHE_DIR`) for 1 hour by default; provider failure history lives in `.cache/provider_health.json` and adaptive-routing performance samples in `.cache/provider_stats.json`. The directory is created `0700` and files `0600`.
+Results are cached under `.cache` (override with `WSP_CACHE_DIR`) for up to 1 hour by default; provider failure history lives in `.cache/provider_health.json` and adaptive-routing performance samples in `.cache/provider_stats.json`. The directory is created `0700` and files `0600`.
 
 ```bash
+python3 scripts/search.py -q "..." --cache-ttl 120  # shorter result-cache lifetime
 python3 scripts/search.py -q "..." --no-cache    # bypass for one call
 WSP_DISABLE_CACHE=1 python3 scripts/search.py -q "..."   # disable globally
 python3 scripts/search.py --clear-cache          # wipe cached results
 python3 scripts/search.py --cache-stats          # inspect
 ```
+
+Query recency and the effective date filter cap the TTL even when `--cache-ttl` requests a longer lifetime. `--time-range` takes precedence over `--freshness`; a shorter explicit TTL still wins. Nonpositive TTL values use the default before applying caps. Cache hits report `cache_age_seconds`. Research mode queries providers directly and does not use the search-result cache.
 
 ## Routing notes
 

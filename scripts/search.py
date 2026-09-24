@@ -22,6 +22,7 @@ Examples:
 """
 
 import argparse
+from datetime import datetime, timedelta, timezone
 import gzip
 from http.client import IncompleteRead
 import hashlib
@@ -36,9 +37,14 @@ import time
 import zlib
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
-from urllib.request import Request, urlopen
+from urllib.request import Request
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urlparse
+
+try:
+    from .http_client import urlopen
+except ImportError:
+    from http_client import urlopen
 
 try:
     from . import docker_detect
@@ -1603,11 +1609,9 @@ def explain_routing(query: str, config: Dict[str, Any]) -> Dict[str, Any]:
 
 FRESHNESS_VALUES = ("day", "week", "month", "year")
 
-# Native recency formats per provider, derived from the request bodies the
-# provider functions in this module already send. Providers absent from this
-# table (tavily, exa, linkup) have no relative-recency parameter in their
-# current API calls, so no native value is invented for them.
+# Native recency formats sent by the provider adapters.
 PROVIDER_FRESHNESS_FORMATS = {
+    "tavily": {v: v for v in FRESHNESS_VALUES},
     "serper": {"day": "qdr:d", "week": "qdr:w", "month": "qdr:m", "year": "qdr:y"},
     "brave": {"day": "pd", "week": "pw", "month": "pm", "year": "py"},
     "querit": {"day": "d1", "week": "w1", "month": "m1", "year": "y1"},
@@ -1619,8 +1623,11 @@ PROVIDER_FRESHNESS_FORMATS = {
 }
 
 
-def freshness_metadata(provider: str, requested: str) -> Dict[str, Any]:
+def freshness_metadata(provider: str, requested: str, result=None) -> Dict[str, Any]:
     """Describe whether a provider applied the requested freshness filter."""
+    if provider == "exa":
+        dates = (result or {}).get("metadata", {}).get("applied_published_dates", {})
+        return {"requested": requested, "applied": bool(dates), "provider": provider, "native_value": dates}
     native = PROVIDER_FRESHNESS_FORMATS.get(provider, {}).get(requested)
     if native is not None:
         return {"requested": requested, "applied": True, "provider": provider, "native_value": native}
@@ -2132,6 +2139,7 @@ def search_tavily(
     exclude_domains: Optional[List[str]] = None,
     include_images: bool = False,
     include_raw_content: bool = False,
+    time_range: Optional[str] = None,
 ) -> dict:
     """Search using Tavily (AI Research Search)."""
     endpoint = "https://api.tavily.com/search"
@@ -2152,6 +2160,9 @@ def search_tavily(
     if exclude_domains:
         body["exclude_domains"] = exclude_domains
     
+    if time_range in FRESHNESS_VALUES:
+        body["time_range"] = time_range
+
     headers = {"Content-Type": "application/json"}
     
     data = make_request(endpoint, headers, body)
@@ -2480,6 +2491,7 @@ def search_exa(
     include_domains: Optional[List[str]] = None,
     exclude_domains: Optional[List[str]] = None,
     text_verbosity: str = "standard",
+    freshness: Optional[str] = None,
 ) -> dict:
     """Search using Exa (Neural/Semantic/Deep Search).
 
@@ -2522,6 +2534,16 @@ def search_exa(
                 "highlights": {"numSentences": 3, "highlightsPerUrl": 2},
             },
         }
+
+    if freshness:
+        hours = {"hour": 1, "day": 24, "week": 168, "month": 720, "year": 8760}.get(freshness)
+        if hours is not None:
+            end = datetime.now(timezone.utc)
+            start_date = start_date or (end - timedelta(hours=hours)).isoformat(timespec="seconds").replace("+00:00", "Z")
+            end_date = end_date or end.isoformat(timespec="seconds").replace("+00:00", "Z")
+    applied_dates = {key: value for key, value in (
+        ("startPublishedDate", start_date), ("endPublishedDate", end_date)
+    ) if value}
 
     if category:
         body["category"] = category
@@ -2579,8 +2601,8 @@ def search_exa(
         # Supporting source documents
         for item in data.get("results", [])[:max_results]:
             text_content = item.get("text", "") or ""
-            highlights = item.get("highlights", [])
-            snippet = text_content[:800] if text_content else (highlights[0] if highlights else "")
+            highlights = [h for h in (item.get("highlights") or []) if isinstance(h, str) and h.strip()]
+            snippet = " ... ".join(highlights[:2]) if highlights else text_content[:800]
             results.append({
                 "title": item.get("title", ""),
                 "url": item.get("url", ""),
@@ -2602,6 +2624,7 @@ def search_exa(
             "answer": answer,
             "grounding": grounding_citations,
             "metadata": {
+                "applied_published_dates": applied_dates,
                 "synthesis_length": len(synthesized_text),
                 "source_count": len(data.get("results", [])),
             },
@@ -2610,11 +2633,11 @@ def search_exa(
     # Standard search result parsing
     for item in data.get("results", [])[:max_results]:
         text_content = item.get("text", "") or ""
-        highlights = item.get("highlights", [])
-        if text_content:
-            snippet = text_content[:800]
-        elif highlights:
+        highlights = [h for h in (item.get("highlights") or []) if isinstance(h, str) and h.strip()]
+        if highlights:
             snippet = " ... ".join(highlights[:2])
+        elif text_content:
+            snippet = text_content[:800]
         else:
             snippet = ""
 
@@ -2635,6 +2658,7 @@ def search_exa(
         "results": results,
         "images": [],
         "answer": answer,
+        "metadata": {"applied_published_dates": applied_dates},
     }
 
 
@@ -2702,7 +2726,6 @@ def search_you(
     }
     
     # Make GET request (You.com uses GET, not POST)
-    from urllib.request import Request, urlopen
     req = Request(url, headers=headers, method="GET")
     
     try:
@@ -3138,6 +3161,40 @@ def search_keenable(
     }
 
 
+class _StoreQueryText(argparse.Action):
+    """Preserve a literal double dash on Python 3.10."""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, "--" if values == [] else values)
+
+
+def _query_argv(argv):
+    """Attach query values so argparse treats leading dashes as data."""
+    result = []
+    index = 0
+    while index < len(argv):
+        arg = argv[index]
+        if arg in {"-q", "--query"} and index + 1 < len(argv):
+            index += 1
+            if argv[index] == "--" and index + 1 < len(argv):
+                index += 1
+            result.append("--query=" + argv[index])
+        else:
+            result.append(arg)
+        index += 1
+    return result
+
+
+def effective_search_cache_ttl(query, *, freshness=None, requested_ttl=None):
+    """Cap cache lifetime by query recency and the effective date filter."""
+    requested = DEFAULT_CACHE_TTL if requested_ttl is None or requested_ttl <= 0 else requested_ttl
+    cap = {"hour": 60, "day": 300, "week": 1800}.get(freshness, DEFAULT_CACHE_TTL)
+    recent, score = QueryAnalyzer({})._detect_recency_intent(query or "")
+    if recent:
+        cap = min(cap, 60 if score >= 3 else 300)
+    return min(requested, cap, DEFAULT_CACHE_TTL)
+
+
 def main():
     config = load_config()
     
@@ -3178,13 +3235,13 @@ Full docs: See README.md and SKILL.md
     )
     parser.add_argument(
         "--query", "-q", 
-        help="Search query"
+        action=_StoreQueryText, help="Search query"
     )
     parser.add_argument(
         "--max-results", "-n", 
         type=int, 
         default=config.get("defaults", {}).get("max_results", 5),
-        help="Maximum results (default: 5)"
+        help="Maximum results, clamped to 1–20 (default: defaults.max_results or 5)"
     )
     parser.add_argument(
         "--images", 
@@ -3406,7 +3463,7 @@ Full docs: See README.md and SKILL.md
         "--cache-ttl",
         type=int,
         default=DEFAULT_CACHE_TTL,
-        help=f"Cache TTL in seconds (default: {DEFAULT_CACHE_TTL} = 1 hour)"
+        help=f"Cache TTL in seconds, capped by query recency and date filters (default: {DEFAULT_CACHE_TTL})"
     )
     parser.add_argument(
         "--no-cache",
@@ -3424,7 +3481,8 @@ Full docs: See README.md and SKILL.md
         help="Show cache statistics and exit"
     )
     
-    args = parser.parse_args()
+    args = parser.parse_args(_query_argv(sys.argv[1:]))
+    args.max_results = max(1, min(20, args.max_results))
     
     # Handle cache management commands first (before query validation)
     if args.clear_cache:
@@ -3572,6 +3630,7 @@ Full docs: See README.md and SKILL.md
                 exclude_domains=args.exclude_domains,
                 include_images=args.images,
                 include_raw_content=args.raw_content,
+                time_range=args.time_range or args.freshness,
             )
         elif prov == "linkup":
             linkup_config = config.get("linkup", {})
@@ -3618,6 +3677,7 @@ Full docs: See README.md and SKILL.md
                 include_domains=args.include_domains,
                 exclude_domains=args.exclude_domains,
                 text_verbosity=args.exa_verbosity,
+                freshness=args.time_range or args.freshness,
             )
         elif prov == "firecrawl":
             firecrawl_config = config.get("firecrawl", {})
@@ -3642,7 +3702,7 @@ Full docs: See README.md and SKILL.md
                 max_results=args.max_results,
                 country=locale_country,
                 language=locale_language,
-                freshness=args.freshness,
+                freshness=args.time_range or args.freshness,
                 safesearch=args.you_safesearch,
                 include_news=not args.no_news,
                 livecrawl=args.livecrawl,
@@ -3687,15 +3747,19 @@ Full docs: See README.md and SKILL.md
         else:
             raise ValueError(f"Unknown provider: {prov}")
 
+    provider_payloads = {}
+
     def execute_with_retry(prov: str) -> Dict[str, Any]:
         last_error = None
-        started_at = time.monotonic()
         for attempt in range(0, 3):
+            started_at = time.monotonic()
             try:
                 result = execute_search(prov)
+                provider_payloads[prov] = result
                 provider_stats.record_provider_outcome(prov, time.monotonic() - started_at, len(result.get("results", [])), False)
                 return result
             except ProviderRequestError as e:
+                provider_stats.record_provider_outcome(prov, time.monotonic() - started_at, 0, True)
                 last_error = e
                 if e.status_code in {401, 403}:
                     break
@@ -3717,12 +3781,10 @@ Full docs: See README.md and SKILL.md
                     time.sleep(_retry_delay(attempt))
                 continue
             except Exception as e:
+                if not isinstance(e, ProviderConfigError):
+                    provider_stats.record_provider_outcome(prov, time.monotonic() - started_at, 0, True)
                 last_error = e
                 break
-        # Configuration problems are not provider failures: they must not skew
-        # the adaptive performance memory.
-        if not isinstance(last_error, ProviderConfigError):
-            provider_stats.record_provider_outcome(prov, time.monotonic() - started_at, 0, True)
         raise last_error if last_error else Exception("Unknown provider execution error")
 
     providers_considered = providers_to_try.copy()
@@ -3782,10 +3844,10 @@ Full docs: See README.md and SKILL.md
         routing_info["mode"] = "research"
         routing_info["provider"] = "research"
         result["routing"].update(routing_info)
-        if args.freshness:
+        if args.time_range or args.freshness:
             result.setdefault("metadata", {})["freshness"] = {
-                "requested": args.freshness,
-                "per_provider": [freshness_metadata(p, args.freshness) for p in research_providers],
+                "requested": args.time_range or args.freshness,
+                "per_provider": [freshness_metadata(p, args.time_range or args.freshness, provider_payloads[p]) for p in research_providers if p in provider_payloads],
             }
         if args.search_type and args.search_type != "search":
             result.setdefault("metadata", {})["search_type"] = {
@@ -3823,6 +3885,8 @@ Full docs: See README.md and SKILL.md
         "exa_verbosity": args.exa_verbosity,
         "category": args.category,
         "similar_url": args.similar_url,
+        "start_date": args.start_date,
+        "end_date": args.end_date,
         "mode": args.mode,
         "quality_report": args.quality_report,
     }
@@ -3835,7 +3899,7 @@ Full docs: See README.md and SKILL.md
             query=args.query,
             provider=provider,
             max_results=args.max_results,
-            ttl=args.cache_ttl,
+            ttl=effective_search_cache_ttl(args.query, freshness=args.time_range or args.freshness, requested_ttl=args.cache_ttl),
             params=cache_context,
         )
         if cached_result:
@@ -3955,8 +4019,8 @@ Full docs: See README.md and SKILL.md
 
         if not cache_hit:
             applied_provider = successful_provider or provider
-            if args.freshness:
-                result.setdefault("metadata", {})["freshness"] = freshness_metadata(applied_provider, args.freshness)
+            if args.time_range or args.freshness:
+                result.setdefault("metadata", {})["freshness"] = freshness_metadata(applied_provider, args.time_range or args.freshness, result)
             if args.search_type and args.search_type != "search":
                 result.setdefault("metadata", {})["search_type"] = search_type_metadata(applied_provider, args.search_type)
             if search_locale.provider_supports_locale(applied_provider):

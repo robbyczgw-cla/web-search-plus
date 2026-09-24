@@ -18,7 +18,12 @@ import zlib
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.request import Request
+
+try:
+    from .http_client import urlopen
+except ImportError:
+    from http_client import urlopen
 
 try:
     from .url_security import validate_outbound_url

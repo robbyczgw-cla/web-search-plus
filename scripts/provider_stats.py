@@ -15,6 +15,13 @@ so the window is persisted to ``provider_stats.json`` in the cache directory
 the samples stay process-local only and adjustments are effectively off.
 """
 
+from contextlib import contextmanager
+
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
+
 import json
 import os
 import tempfile
@@ -99,6 +106,25 @@ def _save_samples(samples: Dict[str, List[Dict[str, Any]]]) -> None:
         pass
 
 
+@contextmanager
+def _stats_file_lock():
+    """Lock the complete read-modify-write across threads and processes."""
+    with _STATS_LOCK:
+        if fcntl is None or _persistence_disabled():
+            yield
+            return
+        directory = _cache_dir()
+        directory.mkdir(parents=True, exist_ok=True)
+        os.chmod(directory, 0o700)
+        fd = os.open(directory / "provider_stats.json.lock", os.O_CREAT | os.O_WRONLY, 0o600)
+        with os.fdopen(fd, "w") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock, fcntl.LOCK_UN)
+
+
 def record_provider_outcome(provider: str, latency_seconds: float, result_count: int, error: bool, now: Optional[float] = None) -> None:
     sample = {
         "t": int(now if now is not None else time.time()),
@@ -106,12 +132,15 @@ def record_provider_outcome(provider: str, latency_seconds: float, result_count:
         "n": max(0, int(result_count or 0)),
         "err": bool(error),
     }
-    with _STATS_LOCK:
-        samples = _load_samples()
-        provider_samples = list(samples.get(provider) or [])
-        provider_samples.append(sample)
-        samples[provider] = provider_samples[-MAX_SAMPLES_PER_PROVIDER:]
-        _save_samples(samples)
+    try:
+        with _stats_file_lock():
+            samples = _load_samples()
+            provider_samples = list(samples.get(provider) or [])
+            provider_samples.append(sample)
+            samples[provider] = provider_samples[-MAX_SAMPLES_PER_PROVIDER:]
+            _save_samples(samples)
+    except OSError:
+        pass
 
 
 def _fresh_samples(provider: str, now: float) -> List[Dict[str, Any]]:
