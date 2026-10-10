@@ -5,6 +5,7 @@ cache directory when it is imported, and it loads ``.env`` files from the skill
 directory, so both are neutralised here first.
 """
 
+import atexit
 import contextlib
 import io
 import os
@@ -20,6 +21,7 @@ SKILL_DIR = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = SKILL_DIR / "scripts"
 
 CACHE_DIR = Path(tempfile.mkdtemp(prefix="wsp-skill-tests-"))
+atexit.register(shutil.rmtree, CACHE_DIR, True)
 os.environ["WSP_CACHE_DIR"] = str(CACHE_DIR)
 # Never read the developer's own config.json.
 os.environ["WEB_SEARCH_PLUS_CONFIG"] = str(CACHE_DIR / "no-config.json")
