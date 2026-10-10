@@ -6,18 +6,29 @@
 
 Unified multi-provider web search and URL extraction for OpenClaw-style agent workflows.
 
-Current version: **4.3.1**
+Current version: **5.0.1**
 
 > **Status: stable OpenClaw skill — compatibility path, not the main engine-development path.**
-> This OpenClaw skill is kept usable and periodically synced for OpenClaw users, but active engine development happens on **[hermes-web-search-plus](https://github.com/robbyczgw-cla/hermes-web-search-plus)** and the **[web-search-plus-mcp](https://github.com/robbyczgw-cla/web-search-plus-mcp)** server. Version 4.3.1 syncs applicable runtime fixes while keeping this CLI **source-only**. The native OpenClaw plugin remains `web-search-plus-plugin-v2` (currently 4.3.1).
+> This OpenClaw skill is kept usable and periodically synced for OpenClaw users, but active engine development happens on **[hermes-web-search-plus](https://github.com/robbyczgw-cla/hermes-web-search-plus)** and the **[web-search-plus-mcp](https://github.com/robbyczgw-cla/web-search-plus-mcp)** server. Since 5.0.1 the skill ships that engine itself (`scripts/wsp_core/`), so skill and engine share one version. The CLI stays **source-only**: ranked links and page text, no model-written answers. The native OpenClaw plugin remains `web-search-plus-plugin-v2`.
 
 ## ⚠️ Data handling & privacy
 
-- **Search queries and extraction URLs are sent to the configured third-party providers** (Serper, Brave, Tavily, Linkup, Querit, Exa, Firecrawl, SerpBase, Keenable, You.com, or your SearXNG instance). Each provider's privacy policy and retention rules apply to what you send.
+- **Search queries and extraction URLs are sent to the configured third-party providers** (Serper, Brave, Tavily, Linkup, Querit, Exa, Firecrawl, SerpBase, Keenable, You.com, or your SearXNG instance). When a provider fails, is slow or answers empty, the query also goes to the next one. Each provider's privacy policy and retention rules apply to what you send.
 - **For sensitive queries, pick the provider explicitly** with `--provider <name>` so you control which third party receives them; self-hosted SearXNG keeps queries on your own infrastructure.
 - **Avoid submitting internal/private URLs for extraction** — extraction URLs are forwarded to external services. Private/loopback/link-local targets and cloud metadata endpoints are blocked by default (opt out with `--allow-private-urls` / `WSP_ALLOW_PRIVATE_URLS=1` for trusted private networks).
-- **Local caching is on by default**: queries, results, provider failure history (`provider_health.json`), and provider performance samples for adaptive routing (`provider_stats.json`) are persisted under `.cache` (or `WSP_CACHE_DIR`) with owner-only permissions (dir `0700`, files `0600`). Use `--no-cache` per call, `WSP_DISABLE_CACHE=1` globally, `--clear-cache` to wipe, `--cache-stats` to inspect.
+- **Local caching is on by default**: search and extraction answers (with the query text), the full text of long extracted pages (up to 7 days), provider state (`v3/state.sqlite3`, `provider_stats.json`, `provider_health.json`) and routing receipts without query text are stored under `.cache` (or `WSP_CACHE_DIR`) with owner-only permissions (dir `0700`, files `0600`). Use `--no-cache` per call, `WSP_DISABLE_CACHE=1` for every call, `--clear-cache` to wipe, `--cache-stats` to inspect.
 - **API keys are never logged or cached.**
+
+## What changed in 5.0.1
+
+The skill now runs the Web Search Plus 5.0.1 engine. Details and the full list of breaking changes are in [CHANGELOG.md](CHANGELOG.md).
+
+- **Routing by query type.** Brave goes first for general, news, local and community queries, Exa for docs and academic queries, Serper for security and shopping queries. A provider without a key is skipped. Expect more Brave usage than before; Querit is no longer picked automatically.
+- **Faster fallback.** The next provider starts when the current one fails, answers with nothing, or is slower than usual (at least 2.5 s). The first useful answer wins.
+- **Extraction per URL.** A bad URL gets its own error entry; the other URLs are still extracted and retried on the next provider if needed.
+- **5.0.1 fixes**: words like "synthesizer" no longer break Exa/Tavily/Linkup searches, long queries are shortened for Brave (600 characters / 75 words) instead of failing, `Retry-After` waits are capped at 30 s, a private SearXNG URL no longer breaks automatic search, and empty answers are not cached.
+- **Breaking**: Exa deep / deep-reasoning and Linkup sourced answers are gone (the flags fall back to normal source search with a warning); a clearly detected query language is now sent to providers; the cache layout changed and extraction answers are cached; SerpBase moved to `api.serpbase.dev`; SearXNG is no longer auto-detected on localhost.
+- Your 4.x flags, environment variables and `config.json` keep working.
 
 ## What changed in 4.3.1
 
@@ -72,12 +83,12 @@ Feature sync with `web-search-plus-plugin` v3.2.0 (hermes-web-search-plus v2.5.0
 
 ## Search providers
 
-- **Serper** — shopping, local, broad Google-style web results
-- **Brave** — independent general web index, good broad fallback
-- **Tavily** — research and explanation queries
-- **Querit** — multilingual and international AI search
+- **Brave** — independent web index; first for general, news, local and community queries
+- **Serper** — Google-style results; first for security and shopping queries
+- **Exa** — semantic search with source URLs; first for docs and academic queries
+- **Tavily** — research-oriented search; fourth in the fallback chain
+- **Querit** — multilingual and international AI search; explicit-only unless allowed
 - **Linkup** — citation/source-grounded search
-- **Exa** — semantic discovery with source URLs
 - **Firecrawl** — search with scrape-ready metadata
 - **You.com** — current-web / RAG-ish queries
 - **SearXNG** — privacy-first self-hosted metasearch
@@ -96,7 +107,7 @@ Feature sync with `web-search-plus-plugin` v3.2.0 (hermes-web-search-plus v2.5.0
 - Keenable
 - Serper (webpage scraper)
 
-Auto extraction tries them in that order and falls back when a provider is unconfigured or fails. Oversized pages are truncated to a head/tail window (default 15,000 chars, `WSP_EXTRACT_CHAR_LIMIT`); inline base64 images become `[IMAGE: alt]` placeholders.
+Auto extraction tries them in that order; a URL that fails or comes back empty is retried on the next provider. Oversized pages are cut to a head/tail window (default 15,000 chars per page, `WSP_EXTRACT_CHAR_LIMIT`); inline base64 images become `[IMAGE: alt]` placeholders.
 
 ## Quick start
 
@@ -118,18 +129,18 @@ python3 scripts/setup.py
 
 ```bash
 python3 scripts/search.py -q "weather in Vienna today"
-# auto-routes to Brave or Serper for broad current-web intent
+# local → Brave
 
-python3 scripts/search.py -q "find credible sources for AI tutoring outcomes"
-# auto-routes to Linkup when available
+python3 scripts/search.py -q "python asyncio TaskGroup documentation"
+# docs → Exa
 
-python3 scripts/search.py -q "latest AI policy updates in Germany"
-# often Querit / Tavily depending on configured providers
+python3 scripts/search.py -q "latest OpenSSH CVE mitigation"
+# security → Serper
 
-python3 scripts/search.py -p exa --exa-depth deep -q "LLM scaling laws research"
+python3 scripts/search.py -p linkup -q "find credible sources for AI tutoring outcomes"
 python3 scripts/search.py -p firecrawl -q "YC startups web scraping"
 python3 scripts/search.py -p serpbase -q "best laptop 2026"
-# explicit SerpBase call — not used by auto-routing unless added to provider_priority
+# explicit SerpBase call — not used by automatic routing unless allowed
 ```
 
 ## Extraction examples
@@ -138,12 +149,15 @@ python3 scripts/search.py -p serpbase -q "best laptop 2026"
 python3 scripts/extract.py --url https://example.com
 python3 scripts/extract.py --url https://docs.linkup.so --provider linkup
 python3 scripts/extract.py --url https://example.com --url https://example.org --include-images
+python3 scripts/extract.py --url https://example.com --extract-char-limit 30000
 ```
+
+Each URL gets its own result or `error` entry. Long pages return a head/tail window (default 15,000 characters per page) with a footer giving the real length and, when kept, the file holding the full text. The command exits 1 only when no URL returned content.
 
 ## Research mode & quality reports
 
 ```bash
-# Concurrent multi-provider search + dedup + top-source extraction
+# Several providers at once, results merged by rank, top sources extracted
 python3 scripts/search.py --mode research -q "EU AI Act obligations for foundation models"
 python3 scripts/search.py --mode research -q "..." --research-providers tavily linkup exa --research-time-budget 30
 
@@ -151,37 +165,44 @@ python3 scripts/search.py --mode research -q "..." --research-providers tavily l
 python3 scripts/search.py -q "official anthropic claude release notes" --quality-report
 ```
 
-Research providers run concurrently (wall-clock ≈ slowest provider); result ordering stays deterministic by submission order. For canonical-source query classes (vendor releases, official docs, policy PDFs, finance/IR, security advisories) results are reranked so primary sources beat mirrors — see `metadata.intent_rerank` and `quality_report.authority_signals`.
+Research providers run concurrently. A page found by several providers ranks higher and lists them in `providers`; each extracted source gets up to two short query-ranked passages. For docs, security and news queries the site of the named vendor or project ranks first.
 
 ## Caching
 
-Results are cached under `.cache` (override with `WSP_CACHE_DIR`) for up to 1 hour by default; provider failure history lives in `.cache/provider_health.json` and adaptive-routing performance samples in `.cache/provider_stats.json`. The directory is created `0700` and files `0600`.
+Search and extraction answers are cached under `.cache` (override with `WSP_CACHE_DIR`) for up to 1 hour by default. Provider state lives next to them (`v3/state.sqlite3`, `provider_stats.json`, `provider_health.json`), and the full text of long extracted pages under `web/v3/` for up to 7 days. Directories are created `0700` and files `0600`.
 
 ```bash
 python3 scripts/search.py -q "..." --cache-ttl 120  # shorter result-cache lifetime
 python3 scripts/search.py -q "..." --no-cache    # bypass for one call
 WSP_DISABLE_CACHE=1 python3 scripts/search.py -q "..."   # disable globally
-python3 scripts/search.py --clear-cache          # wipe cached results
+python3 scripts/search.py --clear-cache          # wipe cached answers
 python3 scripts/search.py --cache-stats          # inspect
 ```
 
-Query recency and the effective date filter cap the TTL even when `--cache-ttl` requests a longer lifetime. `--time-range` takes precedence over `--freshness`; a shorter explicit TTL still wins. Nonpositive TTL values use the default before applying caps. Cache hits report `cache_age_seconds`. Research mode queries providers directly and does not use the search-result cache.
+Query recency, date filters and news/security queries (300 s) can only lower the TTL. A search with provider-specific flags (`--depth`, `--exa-type`, `--category`, ...) is not cached. Research mode queries providers directly and does not use the answer cache. 4.x cache entries are not reused.
 
 ## Routing notes
 
-Provider priority now defaults to:
+The first provider depends on the query type:
 
 ```text
-tavily -> linkup -> querit -> exa -> firecrawl -> brave -> serper -> you -> searxng
+academic, docs     -> exa
+security, shopping -> serper
+everything else    -> brave   (general, news, local, community)
+```
+
+Fallback follows `auto_routing.provider_priority`, by default:
+
+```text
+brave -> serper -> exa -> tavily -> you -> firecrawl -> linkup -> searxng -> keenable
 ```
 
 Notable behavior:
 
-- Brave and Serper share generic web/current-info intent and use deterministic tie-breaking
-- Linkup gets explicit boosts for citation/source/evidence-style queries
-- Firecrawl can win discovery/research-ish queries when configured
-- Exa can auto-upgrade to `deep` or `deep-reasoning` based on query signals
-- Failing or cooling-down providers are skipped by fallback routing
+- SerpBase and Querit are used only when named with `--provider` or allowed in `auto_routing.auto_allow`
+- `"order": "custom"` in `auto_routing` makes `provider_priority` the order for every query
+- An explicit `--provider` does not fall back unless you add `--allow-fallback`
+- Failing or blocked providers are skipped; a slow or empty one is overtaken by the next
 
 ## Config files
 
@@ -196,6 +217,7 @@ Suggested local checks:
 ```bash
 python3 -m unittest discover -s tests -p 'test_*.py'
 python3 scripts/search.py --explain-routing -q "find credible sources for climate change impacts"
+python3 scripts/search.py doctor
 python3 scripts/extract.py --url https://example.com --provider auto --compact
 ```
 

@@ -251,6 +251,24 @@ class ExtractSmokeTests(SkillTestCase):
         self.extract("--url", "https://example.com/a")
         self.assertEqual(len(self.calls), 3)
 
+    def test_inline_base64_images_become_placeholders(self):
+        def tavily(urls, *args, **kwargs):
+            return {"provider": "tavily", "results": [
+                {"url": u, "title": "T", "content": "a ![logo](data:image/png;base64," + "A" * 5000 + ") b"} for u in urls]}
+
+        self.patch_provider("extract_tavily", tavily)
+        item = self.extract("--url", "https://example.com/a")["results"][0]
+        self.assertEqual(item["content"], "a [IMAGE: logo] b")
+
+    def test_search_cli_extract_urls_uses_the_skill_guards(self):
+        code, out, err = self.run_cli(wsp_skill.run_search, [
+            "--compact", "--allow-private-urls", "--extract-urls",
+            "http://169.254.169.254/latest", "https://internal.example.test/x"])
+        self.assertEqual(code, 0, err)
+        result = json.loads(out)
+        self.assertIn("metadata", result["results"][0]["error"])
+        self.assertEqual(result["results"][1]["content"], "short page")
+
     def test_no_key_reports_skill_setup(self):
         os.environ.pop("TAVILY_API_KEY")
         os.environ.pop("FIRECRAWL_API_KEY")

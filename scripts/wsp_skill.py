@@ -430,8 +430,20 @@ def _patch_search_execution(search_module) -> None:
             return original_core(args, config)
         return _run_cli_search_v3(search_module, args, config)
 
+    def extract_plus(urls, provider="auto", output_format="markdown", include_images=False,
+                     include_raw_html=False, render_js=False, spans=False, spans_query=None,
+                     config=None, max_wall_time_ms=None):
+        # search.py --extract-urls and research-mode extraction get the same
+        # guards and per-page budget as scripts/extract.py.
+        return extract_urls(
+            list(urls or []), provider=provider, output_format=output_format, include_images=include_images,
+            include_raw_html=include_raw_html, render_js=render_js, spans=spans, spans_query=spans_query,
+            config=config, max_wall_time_ms=max_wall_time_ms,
+        )
+
     search_module._search_args_from_v3 = search_args_from_v3
     search_module._execute_search_request_core = execute_search_request_core
+    search_module.extract_plus = extract_plus
     search_module._skill_execution_patched = True
 
 
@@ -469,17 +481,41 @@ def _split_content(content: str, limit: int):
     return head, tail, max(0, len(content) - len(head) - len(tail))
 
 
-def apply_char_limit(item: Dict[str, Any], limit: int) -> None:
-    """Cut one extracted page to a head/tail window plus footer when over ``limit``.
+_BASE64_MARKDOWN_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\(\s*data:image/[^)]+\)", re.IGNORECASE)
+_BASE64_HTML_IMAGE_RE = re.compile(r"<img\b(?=[^>]*\bsrc=[\"']data:image/)[^>]*>", re.IGNORECASE)
+_HTML_ALT_RE = re.compile(r"\balt=[\"']([^\"']*)[\"']", re.IGNORECASE)
 
-    The engine already removes inline base64 images and caps the whole batch to
-    its context budget; this adds the skill's per-URL inline budget. The footer
-    reports the page's real length and the stored full-text file when the
-    engine kept one.
+
+def sanitize_extract_content(content: str) -> str:
+    """Replace inline base64 images with ``[IMAGE: alt]`` placeholders."""
+
+    def markdown_image(match):
+        return f"[IMAGE: {(match.group(1) or 'image').strip() or 'image'}]"
+
+    def html_image(match):
+        alt = _HTML_ALT_RE.search(match.group(0))
+        return f"[IMAGE: {((alt.group(1) if alt else '') or 'image').strip() or 'image'}]"
+
+    return _BASE64_HTML_IMAGE_RE.sub(html_image, _BASE64_MARKDOWN_IMAGE_RE.sub(markdown_image, content))
+
+
+def apply_char_limit(item: Dict[str, Any], limit: int) -> None:
+    """Sanitize one extracted page and cut it to a head/tail window when over ``limit``.
+
+    The engine caps the whole batch to its context budget; this adds the
+    skill's per-URL inline budget. The footer reports the page's real length
+    and the stored full-text file when the engine kept one.
     """
     content = item.get("content")
     if not isinstance(content, str):
         return
+    raw_same = item.get("raw_content") == content
+    content = sanitize_extract_content(content)
+    item["content"] = content
+    if raw_same:
+        item["raw_content"] = content
+    elif isinstance(item.get("raw_content"), str):
+        item["raw_content"] = sanitize_extract_content(item["raw_content"])
     full_text = item.get("full_text") if isinstance(item.get("full_text"), dict) else {}
     original = full_text.get("original_chars")
     if not isinstance(original, int):
@@ -532,6 +568,7 @@ def extract_urls(
     char_limit: Optional[int] = None,
     no_cache: bool = False,
     config: Optional[Dict[str, Any]] = None,
+    max_wall_time_ms: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Extract URLs through the engine with the skill's guards and inline budget."""
     from wsp_core import extract as extract_module
@@ -570,6 +607,7 @@ def extract_urls(
                 "spans": spans,
                 "spans_query": spans_query,
                 "no_cache": no_cache,
+                "max_wall_time_ms": max_wall_time_ms,
             },
         )
         execution = execute_v3_request(request, extract_module._extract_adapter(), runtime_config)

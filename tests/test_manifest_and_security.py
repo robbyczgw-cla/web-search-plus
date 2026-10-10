@@ -55,8 +55,9 @@ class ManifestTests(unittest.TestCase):
     def test_declared_hosts_cover_engine_endpoints(self):
         declared = set(MANIFEST["clawhub"]["permissions"]["network"]["outbound_hosts"])
         # Parallel ships inside the vendored engine but has no credential path in
-        # this skill; api.you.com only appears as a signup link.
-        not_called = {"api.parallel.ai", "api.you.com"}
+        # this skill; api.you.com only appears as a signup link; api.serpbase.com
+        # is the 4.x endpoint that wsp_skill rewrites to api.serpbase.dev.
+        not_called = {"api.parallel.ai", "api.you.com", "api.serpbase.com"}
         found = set()
         pattern = re.compile(r"https://((?:api|google|scrape)\.[a-z0-9.-]+|ydc-index\.io)")
         for path in SHIPPED_PY:
