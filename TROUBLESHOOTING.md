@@ -185,27 +185,20 @@ Restart the container and update your config:
 python3 scripts/search.py --explain-routing -q "your query"
 ```
 
-This shows the full analysis:
+This shows the query type, the signals that matched and the candidate order:
 ```json
 {
-  "query": "how much does iPhone 16 Pro cost",
-  "routing_decision": {
-    "provider": "serper",
-    "confidence": 0.68,
-    "reason": "moderate_confidence_match"
-  },
-  "scores": {"serper": 7.0, "tavily": 0.0, "exa": 0.0},
-  "top_signals": [
-    {"matched": "how much", "weight": 4.0},
-    {"matched": "brand + product detected", "weight": 3.0}
-  ]
+  "query": "iPhone 16 Pro Max price",
+  "routing_decision": {"provider": "serper", "reason": "intent_shopping", "routing_policy": "routing-v3"},
+  "intent": {"intent": "shopping", "signals": ["shopping:price_word"]},
+  "first_provider_rules": {"academic": "exa", "docs": "exa", "security": "serper", "shopping": "serper"}
 }
 ```
 
 **Solutions:**
 1. Override with explicit provider: `-p tavily`
 2. Rephrase query to be more explicit about intent
-3. Adjust `confidence_threshold` in config.json (default: 0.3)
+3. Use your own order for every query: `"auto_routing": {"order": "custom", "provider_priority": [...]}` in config.json (`confidence_threshold` has no effect since 5.0)
 
 ---
 

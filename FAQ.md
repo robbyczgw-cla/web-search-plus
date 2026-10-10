@@ -6,26 +6,29 @@
 
 A Python OpenClaw skill for unified web search plus URL extraction.
 
-It supports 10 search providers:
+It supports 11 search providers:
 
-- Serper
 - Brave
+- Serper
+- Exa
 - Tavily
 - Querit
 - Linkup
-- Exa
 - Firecrawl
-- Perplexity via direct API or Kilo gateway
 - You.com
 - SearXNG
+- SerpBase
+- Keenable
 
 It also adds URL extraction through `scripts/extract.py` with fallback across:
 
-- Firecrawl
-- Linkup
 - Tavily
 - Exa
+- Linkup
+- Firecrawl
 - You.com
+- Keenable
+- Serper
 
 ### Is this the same as the OpenClaw plugin?
 
@@ -107,20 +110,13 @@ Priority order for credentials is generally:
 
 ### How does auto-routing decide?
 
-The skill scores query signals and chooses among configured providers only.
+The skill gives each query a type and picks the first configured provider for that type:
 
-Typical routing:
+- academic papers, docs, API references, error messages → Exa
+- security advisories, shopping and prices → Serper
+- general, news, local and community queries → Brave
 
-- shopping, product, local, broad Google-style web → Serper or Brave
-- generic current web → Brave or Serper
-- research/explanation → Tavily
-- source/citation/evidence queries → Linkup
-- multilingual/international updates → Querit or Tavily
-- semantic discovery, similar sites, papers → Exa
-- scrape-ready discovery → Firecrawl
-- direct answer / cited summary → Perplexity via direct API or Kilo gateway
-- RAG/current-web snippets → You.com
-- private/self-hosted search → SearXNG
+A provider without a key is skipped. If the first provider fails, answers with nothing, or is slower than usual, the next one in `auto_routing.provider_priority` starts and the first useful answer wins.
 
 ### How do I see the routing decision?
 
@@ -137,11 +133,11 @@ python3 scripts/search.py -p linkup -q "credible sources for AI tutoring outcome
 python3 scripts/search.py -p firecrawl -q "YC startups web scraping"
 ```
 
-Or adjust `auto_routing.provider_priority` / `disabled_providers` in `config.json`.
+Or adjust `auto_routing.provider_priority` / `disabled_providers` in `config.json`. To use your own order for every query, set `"order": "custom"` in `auto_routing`.
 
 ### What does low confidence mean?
 
-The query did not strongly match one provider. The skill may fall back to the configured fallback provider, usually Serper.
+The query matched no query type clearly. It is treated as a general query and goes to Brave first.
 
 ## Extraction
 
@@ -187,7 +183,7 @@ python3 scripts/extract.py --url https://example.com --format html --include-raw
 
 ### Where do my queries and URLs go?
 
-**Every search query is transmitted to the third-party provider that serves it** — Serper, Brave, Tavily, Linkup, Querit, Exa, Firecrawl, SerpBase, Keenable, Perplexity (via the Kilo gateway), You.com, or your SearXNG instance. **Every extraction URL is forwarded to the chosen extraction provider** (Tavily, Exa, Linkup, Firecrawl, You.com, Keenable, Serper), whose servers fetch the page. Each provider's own privacy policy and data retention apply.
+**Every search query is transmitted to the third-party provider that serves it** — Serper, Brave, Tavily, Linkup, Querit, Exa, Firecrawl, SerpBase, Keenable, You.com, or your SearXNG instance. When a provider fails, is slow or answers with nothing, the query also goes to the next provider. **Every extraction URL is forwarded to the chosen extraction provider** (Tavily, Exa, Linkup, Firecrawl, You.com, Keenable, Serper), whose servers fetch the page. Each provider's own privacy policy and data retention apply.
 
 ### How do I keep sensitive queries under control?
 
@@ -197,7 +193,7 @@ python3 scripts/extract.py --url https://example.com --format html --include-raw
 
 ### What is stored locally?
 
-Queries, results, and provider failure history are persisted under the cache directory: result cache entries (which include the raw query text) and `provider_health.json` (provider error messages and cooldown state). The directory is created with mode `0700` and files with `0600`. Disable with `WSP_DISABLE_CACHE=1`, bypass per call with `--no-cache`, wipe with `--clear-cache`.
+Everything lives under the cache directory: search and extraction answers (which include the query text), the full text of long extracted pages (up to 7 days), provider state (`v3/state.sqlite3`, `provider_stats.json`, `provider_health.json`) and routing receipts without query text. Directories are created with mode `0700` and files with `0600`. Bypass the answer cache with `--no-cache` per call or `WSP_DISABLE_CACHE=1` for every call, wipe it with `--clear-cache`.
 
 ### Are API keys ever logged or cached?
 
@@ -213,7 +209,7 @@ Default TTL: 3600 seconds.
 
 ### Where are cached results stored?
 
-In `.cache/` inside the skill folder by default (created mode `0700`; files `0600`). Provider failure history is stored alongside in `.cache/provider_health.json`.
+In `.cache/` inside the skill folder by default (created mode `0700`; files `0600`). Provider state is stored alongside (`.cache/v3/state.sqlite3`, `.cache/provider_health.json`).
 
 Override with:
 

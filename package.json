@@ -1,7 +1,7 @@
 {
   "name": "web-search-plus",
-  "version": "4.3.1",
-  "description": "Unified multi-provider web search and URL extraction skill with intelligent auto-routing across Serper, Brave, Tavily, Querit, Linkup, Exa, Firecrawl, You.com, SearXNG, SerpBase, and Keenable. Adds unified freshness/news filters, locale-aware defaults, spam/mirror result filtering, and adaptive provider routing. Queries and URLs are sent to the configured third-party provider APIs; results, provider failure history, and provider performance stats are cached locally under .cache (configurable via WSP_CACHE_DIR, disable with WSP_DISABLE_CACHE=1 or --no-cache).",
+  "version": "5.0.1",
+  "description": "Unified multi-provider web search and URL extraction skill on the Web Search Plus 5.0.1 engine, across Serper, Brave, Tavily, Querit, Linkup, Exa, Firecrawl, You.com, SearXNG, SerpBase, and Keenable. Automatic routing picks the first provider by query type (Brave for general, news, local and community; Exa for docs and academic; Serper for security and shopping) and falls back quickly when a provider fails, is slow or returns nothing. Source-only: ranked links and extracted page text, no model-written answers. Queries and URLs are sent to the configured third-party provider APIs; results, provider state and extracted page text are cached locally under .cache (configurable via WSP_CACHE_DIR, disable with WSP_DISABLE_CACHE=1 or --no-cache).",
   "keywords": [
     "openclaw",
     "skill",
@@ -96,7 +96,7 @@
         "SEARXNG_INSTANCE_URL": "optional",
         "SERPBASE_API_KEY": "optional — explicit/fallback-only Google SERP provider",
         "KEENABLE_API_KEY": "optional — Keenable independent web index (search + extraction)",
-        "WSP_KEENABLE_ALLOW_PUBLIC": "optional — set 1 to opt in to Keenable keyless shared public tier (no SLA)"
+        "WSP_KEENABLE_ALLOW_PUBLIC": "optional — set 1 to opt in to Keenable keyless shared public tier (no SLA); KEENABLE_ALLOW_PUBLIC=1 works too"
       }
     },
     "permissions": {
@@ -112,7 +112,7 @@
           "ydc-index.io",
           "scrape.serper.dev",
           "api.keenable.ai",
-          "api.serpbase.com",
+          "api.serpbase.dev",
           "user-configured SearXNG instance (SEARXNG_INSTANCE_URL)"
         ],
         "note": "Search queries and extraction URLs are transmitted to whichever of these third-party providers is selected. URLs supplied for extraction are also fetched by the chosen provider's infrastructure."
@@ -138,12 +138,16 @@
           "WSP_EXTRACT_CHAR_LIMIT",
           "WSP_LOCALE_COUNTRY",
           "WSP_LOCALE_LANGUAGE",
-          "WSP_HTTP_KEEPALIVE"
+          "WSP_HTTP_KEEPALIVE",
+          "KEENABLE_ALLOW_PUBLIC",
+          "WEB_SEARCH_PLUS_CONFIG",
+          "WSP_BUDGET_PREFLIGHT_OFF"
         ]
       },
       "filesystem": {
         "write": [
-          ".cache/ (or WSP_CACHE_DIR) — cached search results, provider_health.json failure history, and provider_stats.json performance samples; created mode 0700, files mode 0600"
+          ".cache/ (or WSP_CACHE_DIR) — search and extraction response cache, extracted full page text for long pages (kept up to 7 days), provider state (v3/state.sqlite3: circuit breakers, budgets, latency samples), provider_stats.json, provider_health.json, and routing receipts without query text (operator/v3/receipts.jsonl); directories mode 0700, files mode 0600",
+          "config.json in the skill directory — written only by the interactive setup wizard (scripts/setup.py)"
         ]
       }
     }

@@ -1,5 +1,67 @@
 # Changelog - Web Search Plus
 
+## [5.0.1] - 2026-10-10
+
+The skill now runs the Web Search Plus 5.0.1 engine. The engine ships inside the skill as `scripts/wsp_core/`, copied from hermes-web-search-plus v5.0.1 with one follow-up fix (Brave accepts 600 characters and 75 words per query; 5.0.1 cut queries at 400 and 50). `scripts/search.py` and `scripts/extract.py` are now small entry points over it; `scripts/wsp_skill.py` keeps this skill's flags, environment variables, config files and provider set. The skill stays source-only: ranked links and page text, no model-written answers. The skill version now follows the engine version.
+
+### Security
+
+- The skill refuses to start while a `scripts/providers.d/` directory exists. The engine would import every module in it; the skill ships none and runs no provider code beyond the vendored engine.
+
+### Changed
+
+- **Routing by query type.** Automatic search labels each query (academic, community, docs, general, local, news, security, shopping) and picks the first provider from that: Brave for general, news, local and community queries, Exa for docs and academic queries, Serper for security and shopping queries. A provider without a key is skipped; fallback follows `auto_routing.provider_priority`, which now starts with Brave, Serper, Exa, Tavily. `--explain-routing` shows the query type, its signals and the candidate order.
+- **Faster fallback.** The next provider starts when the current one fails, returns no results, or is slower than its usual time (at least 2.5 s); the first useful answer wins. While a fallback exists, a provider gets one try with a 10 s timeout instead of two slower tries. This applies to `scripts/search.py` too: normal searches run on the engine's v3 path, and provider-specific flags (`--depth`, `--topic`, `--exa-type`, `--category`, SearXNG and You.com options and so on) still reach each attempt.
+- **Extraction per URL.** One blocked, unresolvable or failing URL gets its own `error` entry and the other URLs are still extracted, retried on the next provider when needed, in the order you gave them. Error messages no longer reveal internal IP addresses. Empty pages no longer count as a success.
+- Long extracted pages report their real length. When the engine kept the full text, the footer names the file in the cache directory. The per-page inline budget (15,000 characters, `WSP_EXTRACT_CHAR_LIMIT`, `--extract-char-limit`) stays.
+- A search fetches up to five extra results (at most 20), so spam removal and the two-per-domain cap refill the list instead of leaving it short.
+- The site of the vendor or project a query names ranks first for docs, security and news queries; social-network pages give way to other results outside local queries.
+- `--include-domains` / `--exclude-domains` now work on Brave, Serper, SerpBase and You.com (as `site:` operators).
+- Research mode merges the provider result lists by rank (a page found by several providers ranks higher and lists them in `providers`) and adds up to two short query-ranked passages per extracted source.
+- Rate limits: a `Retry-After` over 30 s no longer makes a call wait; the provider stays blocked for at most an hour. An empty provider account is reported as "Out of credits". Transient errors block a provider only after three failures in a row.
+- New in `scripts/search.py`: `doctor` (offline configuration check), `--extract-urls`, `--allow-fallback`, `--search-type`, `--format`, `--spans`. New in `scripts/extract.py`: `--spans`, `--spans-query`, `--no-cache`.
+- Setup hints in error messages point at `python3 scripts/setup.py` and the skill's `.env`. `setup.py` writes the 5.0 config layout and explains the new routing; `config.example.json` follows it.
+- `KEENABLE_ALLOW_PUBLIC=1` works alongside `WSP_KEENABLE_ALLOW_PUBLIC=1`; `WEB_SEARCH_PLUS_CONFIG` can point at another `config.json`.
+
+### Fixed (from the 5.0.1 engine)
+
+- Queries containing words such as "synthesizer" or "verify the claim" no longer fail at Exa, Tavily or Linkup.
+- Long queries no longer fail at Brave: the free text is shortened at a word boundary past 600 characters / 75 words, `site:` operators are kept, and the output says so (`metadata.query_truncated`). Queries over 2,000 characters are cut before the search.
+- Turning off automatic routing without a default provider no longer fails every search.
+- A SearXNG URL on a private address without `SEARXNG_ALLOW_PRIVATE=1` no longer breaks every automatic search; SearXNG is skipped.
+- Template values in `.env` (`your-key-here`, `changeme`, ...) count as unset.
+- A search that every provider answered with no results is no longer cached.
+
+### Breaking changes
+
+- **Different providers answer automatic searches.** Expect much more Brave usage and less Tavily, Linkup, Querit, Firecrawl and You.com usage, which changes which API quota is spent. Querit is no longer picked automatically; use `--provider querit` or `"auto_routing": {"auto_allow": {"querit": true}}`. A `config.json` that still holds the 4.x default order (`tavily, linkup, querit, ...`) gets the new default order. Your own order still orders the fallback chain; to use it for every query, add `"order": "custom"` to `auto_routing`.
+- **Exa deep synthesis and Linkup sourced answers are gone.** `--exa-depth deep|deep-reasoning` and `--linkup-output-type sourcedAnswer` are still accepted but run a normal source search and print a warning on stderr. Automatic routing no longer switches Exa to deep mode.
+- **Query language.** Without a configured language, a clearly detected query language is sent to the provider (a German query is searched in German); unclear queries still go out as English. 4.x sent English unless `locale.language` was `auto`. Set `WSP_LOCALE_LANGUAGE=en` or `"defaults": {"locale": {"language": "en"}}` to keep one language.
+- **A slow first provider means a second provider sees the query.** With fallback the query can go to two providers in one search. Use `--provider <name>` to keep a query with one provider.
+- **Cache layout.** Answers are cached in a new layout under `.cache` (`v3/`, `web/v3/`, `operator/v3/`); 4.x cache entries are not reused, so the first repeat of each query misses once. Extraction answers are now cached for an hour (4.x did not cache extraction); use `--no-cache` or `WSP_DISABLE_CACHE=1`. `WSP_DISABLE_CACHE=1` bypasses the answer caches but provider state (circuit breakers, latency samples) is still written to the cache directory.
+- **Extraction exit code and output.** `scripts/extract.py` exits 1 only when no URL returned content; a batch with some failed URLs exits 0 and lists the failures per URL. Several URLs share a 60,000-character budget before the per-page window applies; cut pages carry `full_text` with the stored file.
+- **Metadata names.** Spam removal and domain capping are reported as `metadata.spam_filtered` and `metadata.domain_diversity_demoted` (4.x: `metadata.result_filter`). `routing.reason` is `intent_<type>`, `routing.scores` is empty, `routing.routing_policy` is `routing-v3`, and `routing.adaptive_adjustments` is gone.
+- **SerpBase endpoint.** SerpBase calls go to `api.serpbase.dev/google/search` (4.x: `api.serpbase.com/search`). A config that still names the old endpoint is switched over.
+- **No SearXNG auto-detection.** 4.x guessed `http://127.0.0.1:8080` (or the Docker bridge) when no SearXNG URL was set. Set `SEARXNG_INSTANCE_URL` instead.
+- **Stricter config.json.** Invalid values (for example `confidence_threshold` outside 0..1) make the whole file ignored with a warning on stderr; the file itself is left alone.
+- **Python modules.** `scripts/http_client.py`, `provider_registry.py`, `provider_stats.py`, `quality.py`, `research.py`, `search_locale.py` and `docker_detect.py` are gone; their code lives in `scripts/wsp_core/`. The CLI commands are the supported interface.
+
+### Not in this skill
+
+- Parallel ships inside the engine copy but is not part of this skill: `PARALLEL_API_KEY` is ignored, Parallel is in no automatic chain, and `--provider parallel` is refused. DonSeTch, Octen and TinyFish (`providers.d`) are not shipped. These stay on the native plugin.
+- The Operator Console server and the TypeSafe (JEV) helper are not shipped; the JEV options stay off. The skill starts no subprocesses and opens no listening sockets.
+- `.env` is read from the skill directory only, not from a Hermes profile.
+
+### Permissions
+
+- Outbound hosts: `api.serpbase.com` is replaced by `api.serpbase.dev`. No other host changes.
+- Environment reads added: `KEENABLE_ALLOW_PUBLIC`, `WEB_SEARCH_PLUS_CONFIG`, `WSP_BUDGET_PREFLIGHT_OFF`.
+- Filesystem: the cache directory now also holds the full text of long extracted pages (kept up to 7 days), `v3/state.sqlite3` and routing receipts without query text. The setup wizard's `config.json` write is now declared.
+
+### Tests
+
+- New stdlib `unittest` suites (`tests/`): the 4.3.1 flags and environment variables, 4.x config migration, the manifest and shipped-file footprint, and an offline smoke run of the engine with fake providers (routing, fallback on empty, failing and slow providers, research mode, per-URL extraction, caching, file modes). The 4.x tests of removed internals are gone.
+
 ## [4.3.1] - 2026-09-24
 
 Ported applicable Hermes runtime changes into the source-only CLI:
