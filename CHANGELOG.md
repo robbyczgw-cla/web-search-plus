@@ -4,6 +4,10 @@
 
 The skill now runs the Web Search Plus 5.0.1 engine. The engine ships inside the skill as `scripts/wsp_core/`, copied from hermes-web-search-plus v5.0.1 with one follow-up fix (Brave accepts 600 characters and 75 words per query; 5.0.1 cut queries at 400 and 50). `scripts/search.py` and `scripts/extract.py` are now small entry points over it; `scripts/wsp_skill.py` keeps this skill's flags, environment variables, config files and provider set. The skill stays source-only: ranked links and page text, no model-written answers. The skill version now follows the engine version.
 
+### Security
+
+- The skill refuses to start while a `scripts/providers.d/` directory exists. The engine would import every module in it; the skill ships none and runs no provider code beyond the vendored engine.
+
 ### Changed
 
 - **Routing by query type.** Automatic search labels each query (academic, community, docs, general, local, news, security, shopping) and picks the first provider from that: Brave for general, news, local and community queries, Exa for docs and academic queries, Serper for security and shopping queries. A provider without a key is skipped; fallback follows `auto_routing.provider_priority`, which now starts with Brave, Serper, Exa, Tavily. `--explain-routing` shows the query type, its signals and the candidate order.

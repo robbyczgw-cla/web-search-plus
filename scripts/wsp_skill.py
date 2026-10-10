@@ -35,6 +35,20 @@ SKILL_DIR = SCRIPTS_DIR.parent
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
+# --- Provider plugins are not part of the skill -----------------------------
+# The engine imports every module in scripts/providers.d when its provider
+# registry loads. The skill ships no such directory and runs no provider code
+# beyond the vendored engine, so refuse to start while one exists instead of
+# executing it.
+PROVIDERS_D = SCRIPTS_DIR / "providers.d"
+if PROVIDERS_D.exists():
+    sys.stderr.write(
+        f"Web Search Plus skill: {PROVIDERS_D} is not supported in the skill and would "
+        "load extra provider code. Remove it, or use the Hermes plugin for "
+        "providers.d providers.\n"
+    )
+    raise SystemExit(2)
+
 # --- Bootstrap: must run before wsp_core.config is imported -----------------
 # wsp_core.config loads .env files when it is imported: scripts/.env, the skill
 # directory's .env and the Hermes profile .env. The skill reads only its own

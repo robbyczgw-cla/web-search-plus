@@ -143,3 +143,30 @@ class SsrfValidationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ProvidersDirectoryTests(unittest.TestCase):
+    """A scripts/providers.d directory must stop the skill before any of it runs."""
+
+    def test_skill_refuses_to_start_with_providers_d(self):
+        import shutil
+        import subprocess
+        import sys
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            scripts = Path(tmp) / "scripts"
+            shutil.copytree(SCRIPTS_DIR, scripts, ignore=shutil.ignore_patterns("__pycache__"))
+            marker = Path(tmp) / "loaded"
+            (scripts / "providers.d").mkdir()
+            (scripts / "providers.d" / "evil.py").write_text(
+                f"open({str(marker)!r}, 'w').close()\n", encoding="utf-8"
+            )
+            proc = subprocess.run(
+                [sys.executable, str(scripts / "search.py"), "--help"],
+                capture_output=True, text=True, timeout=60,
+            )
+            self.assertEqual(proc.returncode, 2)
+            self.assertIn("providers.d", proc.stderr)
+            self.assertFalse(marker.exists())
